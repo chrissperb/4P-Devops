@@ -1,6 +1,7 @@
 # Estudo de caso — Sistema de Gerenciamento de Eventos
 
 **Autor:** Christian Sperb · Atividade da disciplina *Desenvolvimento de Software e Operações de TI — DevOps*, Unidade II.
+
 **Base conceitual:** unidade II do material da disciplina (AWS e segurança, VPC, segurança de tráfego, IAM, microsserviços, serviços de computação, ECS/Fargate, Lambda e suas cotas).
 
 ---
@@ -26,7 +27,10 @@
 | Vazão por invocação | 6 MB (síncrono) | Unidade II, p. 70 — folgado para payloads de evento/ingresso |
 | Duração máxima | 15 min | Unidade II, p. 66 — define o limite de uso do Lambda |
 
-Duas conclusions estruturam a decisão: **(a)** a carga é baixa em termos absolutos e **(b)** é concentrada em janelas curtas. Isso favorece execução sob demanda, com escala automática, em vez de frota fixa de máquinas.
+### Duas conclusões estruturam a decisão
+
+- **(a)** a carga é baixa em termos absolutos e o pico de venda é bem abaixo da cota do Lambda, de modo que a plataforma absorve o pico automaticamente, sem provisionamento antecipado, pagando apenas pelo uso.
+- **(b)** é concentrada em janelas curtas. Isso favorece execução sob demanda, com escala automática, em vez de frota fixa de máquinas.
 
 ## 3. Decisão de computação: serverless (AWS Lambda) como padrão
 
@@ -85,7 +89,7 @@ Duas conclusions estruturam a decisão: **(a)** a carga é baixa em termos absol
 
 Comunicação: **síncrona** entre o front-end e a API (API Gateway → Lambda); **assíncrona** entre serviços (fila para notificações, eventos de domínio para propagação de mudanças). O microsserviço de eventos é o dono do dado mestre; os demais o consultam por API ou por réplica de leitura, evitando acoplamento direto ao banco.
 
-## 5. Justificativa (2 parágrafos)
+## 5. Justificativa
 
 O desenho adotado é **serverless, com AWS Lambda como padrão dos seis microsserviços**, apoiado por uma VPC por região organizada em sub-redes públicas, de aplicação e de dados, distribuídas em duas zonas de disponibilidade. A justificativa nasce do volume: 100.000 chamadas por dia equivalem a cerca de 1,16 requisição por segundo, e o pico de venda (25–60 RPS) fica muito abaixo da cota de 1.000 execuções simultâneas do Lambda (Unidade II, p. 70), de modo que a plataforma absorve o pico automaticamente, sem provisionamento antecipado, pagando apenas pelo uso. Em termos de rede, o isolamento em sub-redes privadas com Security Groups em camadas (edge → aplicação → dados), NAT Gateway para a única saída controlada e IAM com role por serviço garante que nenhum componente de aplicação fique exposto, ao mesmo tempo em que a distribuição entre AZs mantém a operação disponível em caso de falha de zona — o que é decisivo para um sistema em que a venda de ingressos tem janelas de altíssima concentração.
 
