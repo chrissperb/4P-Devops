@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 740" width="1240" height="740" role="img" aria-label="Arquitetura global do sistema de gerenciamento de eventos na AWS">
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#93a8ff" />
+    </marker>
+    <marker id="ahv" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#4fd6c4" />
+    </marker>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#f5f5fb" stroke-width="1" opacity="0.05" />
+    </pattern>
+    <style>
+      .t { font-family: 'Space Grotesk', 'Inter', sans-serif; fill: #f5f5fb; }
+      .b { font-family: 'Inter', sans-serif; fill: #f5f5fb; }
+      .h1 { font-size: 23px; font-weight: 700; }
+      .h2 { font-size: 15px; font-weight: 700; }
+      .h3 { font-size: 13px; font-weight: 600; }
+      .s { font-size: 11px; }
+      .xs { font-size: 10px; }
+      .muted { fill: #f5f5fb; opacity: 0.62; }
+      .box { fill: #12121f; stroke: #f5f5fb; stroke-opacity: 0.14; }
+    </style>
+  </defs>
+
+  <rect width="1240" height="740" fill="#0b0b16" />
+  <rect width="1240" height="740" fill="url(#grid)" />
+
+  <text class="t h1" x="40" y="48">Arquitetura global — Sistema de Gerenciamento de Eventos</text>
+  <text class="b s muted" x="40" y="74">≈ 1,16 req/s em média · 25–60 RPS em pico de venda · active-active em 3 regiões · borda global CloudFront</text>
+
+  <!-- usuários -->
+  <rect class="box" x="40" y="300" width="210" height="100" rx="16" fill="#15152a" stroke="#b3a0ff" stroke-opacity="0.5" />
+  <text class="t h2" x="60" y="334">Usuários</text>
+  <text class="b s muted" x="60" y="356">organizadores de eventos</text>
+  <text class="b s muted" x="60" y="374">e participantes</text>
+
+  <!-- Route 53 -->
+  <rect class="box" x="300" y="300" width="200" height="100" rx="16" fill="#1e1e38" stroke="#93a8ff" stroke-opacity="0.5" />
+  <text class="t h2" x="320" y="334">Amazon Route 53</text>
+  <text class="b s muted" x="320" y="356">roteamento por latência</text>
+  <text class="b s muted" x="320" y="374">+ failover de região</text>
+
+  <!-- CloudFront -->
+  <rect class="box" x="550" y="300" width="230" height="100" rx="16" fill="#1e1e38" stroke="#4fd6c4" stroke-opacity="0.55" />
+  <text class="t h2" x="570" y="334">Amazon CloudFront</text>
+  <text class="b s muted" x="570" y="356">TLS 1.3 · cache de estáticos</text>
+  <text class="b s muted" x="570" y="374">AWS WAF [ext.]</text>
+
+  <line x1="250" y1="350" x2="296" y2="350" stroke="#93a8ff" stroke-width="2" marker-end="url(#ah)" />
+  <line x1="500" y1="350" x2="546" y2="350" stroke="#93a8ff" stroke-width="2" marker-end="url(#ah)" />
+
+  <!-- regiões -->
+  <g>
+    <rect class="box" x="830" y="100" width="370" height="170" rx="16" fill="#12121f" stroke="#6d4aff" stroke-opacity="0.55" />
+    <text class="t h3" x="850" y="128">Região A · São Paulo (sa-east-1)</text>
+    <rect x="850" y="142" width="100" height="52" rx="10" fill="#241b4a" stroke="#b3a0ff" stroke-opacity="0.6" />
+    <text class="b xs" x="862" y="164">API</text>
+    <text class="b xs" x="862" y="180">Gateway</text>
+    <rect x="960" y="142" width="110" height="52" rx="10" fill="#0e332f" stroke="#4fd6c4" stroke-opacity="0.6" />
+    <text class="b xs" x="972" y="164">Lambda</text>
+    <text class="b xs" x="972" y="180">× 6 serviços</text>
+    <rect x="1080" y="142" width="100" height="52" rx="10" fill="#3a2a0f" stroke="#f6b755" stroke-opacity="0.6" />
+    <text class="b xs" x="1092" y="164">Dados</text>
+    <text class="b xs" x="1092" y="180">RDS / Dynamo</text>
+    <text class="b xs muted" x="850" y="220">Autenticação · Eventos · Ingressos</text>
+    <text class="b xs muted" x="850" y="238">Pagamentos · Notificações · Inscrições</text>
+    <text class="b xs" x="850" y="258" fill="#4fd6c4">VPC 10.0.0.0/16 · 2 AZs</text>
+  </g>
+
+  <g>
+    <rect class="box" x="830" y="300" width="370" height="170" rx="16" fill="#12121f" stroke="#6d4aff" stroke-opacity="0.55" />
+    <text class="t h3" x="850" y="328">Região B · Virgínia do Norte (us-east-1)</text>
+    <rect x="850" y="342" width="100" height="52" rx="10" fill="#241b4a" stroke="#b3a0ff" stroke-opacity="0.6" />
+    <text class="b xs" x="862" y="364">API</text>
+    <text class="b xs" x="862" y="380">Gateway</text>
+    <rect x="960" y="342" width="110" height="52" rx="10" fill="#0e332f" stroke="#4fd6c4" stroke-opacity="0.6" />
+    <text class="b xs" x="972" y="364">Lambda</text>
+    <text class="b xs" x="972" y="380">× 6 serviços</text>
+    <rect x="1080" y="342" width="100" height="52" rx="10" fill="#3a2a0f" stroke="#f6b755" stroke-opacity="0.6" />
+    <text class="b xs" x="1092" y="364">Dados</text>
+    <text class="b xs" x="1092" y="380">RDS / Dynamo</text>
+    <text class="b xs muted" x="850" y="420">Mesma topologia, recursos e dados próprios</text>
+    <text class="b xs muted" x="850" y="438">(replicação global por parte da aplicação)</text>
+    <text class="b xs" x="850" y="458" fill="#4fd6c4">VPC 10.0.0.0/16 · 2 AZs</text>
+  </g>
+
+  <g>
+    <rect class="box" x="830" y="500" width="370" height="170" rx="16" fill="#12121f" stroke="#6d4aff" stroke-opacity="0.55" />
+    <text class="t h3" x="850" y="528">Região C · Singapura (ap-southeast-1)</text>
+    <rect x="850" y="542" width="100" height="52" rx="10" fill="#241b4a" stroke="#b3a0ff" stroke-opacity="0.6" />
+    <text class="b xs" x="862" y="564">API</text>
+    <text class="b xs" x="862" y="580">Gateway</text>
+    <rect x="960" y="542" width="110" height="52" rx="10" fill="#0e332f" stroke="#4fd6c4" stroke-opacity="0.6" />
+    <text class="b xs" x="972" y="564">Lambda</text>
+    <text class="b xs" x="972" y="580">× 6 serviços</text>
+    <rect x="1080" y="542" width="100" height="52" rx="10" fill="#3a2a0f" stroke="#f6b755" stroke-opacity="0.6" />
+    <text class="b xs" x="1092" y="564">Dados</text>
+    <text class="b xs" x="1092" y="580">RDS / Dynamo</text>
+    <text class="b xs muted" x="850" y="620">Ativa para o mercado asiático; entra em</text>
+    <text class="b xs muted" x="850" y="638">rota quando a latência justifica</text>
+    <text class="b xs" x="850" y="658" fill="#4fd6c4">VPC 10.0.0.0/16 · 2 AZs</text>
+  </g>
+
+  <!-- CloudFront para as regiões -->
+  <path d="M 780 330 C 810 330 800 185 826 185" fill="none" stroke="#93a8ff" stroke-width="2" marker-end="url(#ah)" />
+  <path d="M 780 350 L 826 385" fill="none" stroke="#93a8ff" stroke-width="2" marker-end="url(#ah)" />
+  <path d="M 780 370 C 810 370 800 585 826 585" fill="none" stroke="#93a8ff" stroke-width="2" marker-end="url(#ah)" />
+
+  <!-- nota de decisão -->
+  <rect class="box" x="40" y="300" width="210" height="0" rx="0" fill="none" />
+  <rect x="40" y="430" width="740" height="240" rx="16" fill="#12121f" stroke="#f5f5fb" stroke-opacity="0.12" />
+  <text class="t h3" x="64" y="462">Decisão de computação: serverless (AWS Lambda)</text>
+  <text class="b s" x="64" y="492">100.000 chamadas/dia ≈ 1,16 req/s em média; pico de venda 25–60 RPS.</text>
+  <text class="b s" x="64" y="514">Cota de 1.000 execuções simultâneas do Lambda (Unidade II, p. 70) cobre o pico com folga.</text>
+  <text class="b s" x="64" y="536">Cada microsserviço escala e publica de forma independente, em 3 regiões, sem frota de VMs.</text>
+  <text class="b s" x="64" y="566">Exceção: worker de notificações em ECS Fargate (tarefas longas / filas — limite de 15 min do Lambda, p. 66).</text>
+  <text class="b s muted" x="64" y="596">EC2/EKS rejeitados: frota fixa ociosa, patching e escala horizontal manual desproporcionais</text>
+  <text class="b s muted" x="64" y="614">para 100 mil chamadas/dia. Serviços marcados como [ext.] não constam na ementa da Unidade II.</text>
+
+  <text class="b xs muted" x="40" y="712">Fonte base: unidade II — AWS/VPC (cap. 4–6), microsserviços (cap. 9), computação (cap. 10), Fargate (cap. 13), Lambda (cap. 15–16).</text>
+</svg>

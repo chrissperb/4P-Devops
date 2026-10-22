@@ -1,0 +1,133 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 980" width="1240" height="980" role="img" aria-label="Arquitetura de rede por região do sistema de gerenciamento de eventos na AWS">
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#93a8ff" />
+    </marker>
+    <marker id="aht" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#4fd6c4" />
+    </marker>
+    <marker id="aho" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#f6b755" />
+    </marker>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#f5f5fb" stroke-width="1" opacity="0.05" />
+    </pattern>
+    <style>
+      .t { font-family: 'Space Grotesk', 'Inter', sans-serif; fill: #f5f5fb; }
+      .b { font-family: 'Inter', sans-serif; fill: #f5f5fb; }
+      .h1 { font-size: 23px; font-weight: 700; }
+      .h2 { font-size: 14px; font-weight: 700; }
+      .h3 { font-size: 12.5px; font-weight: 600; }
+      .s { font-size: 11px; }
+      .xs { font-size: 10px; }
+      .muted { fill: #f5f5fb; opacity: 0.62; }
+    </style>
+  </defs>
+
+  <rect width="1240" height="980" fill="#0b0b16" />
+  <rect width="1240" height="980" fill="url(#grid)" />
+
+  <text class="t h1" x="40" y="46">Arquitetura de rede por região — VPC</text>
+  <text class="b s muted" x="40" y="72">Região sa-east-1 (São Paulo) · 2 zonas de disponibilidade · sub-redes pública, de aplicação e de dados · computação serverless</text>
+
+  <!-- usuários -->
+  <rect x="40" y="110" width="200" height="76" rx="16" fill="#15152a" stroke="#b3a0ff" stroke-opacity="0.5" />
+  <text class="t h2" x="58" y="140">Usuários</text>
+  <text class="b xs muted" x="58" y="160">web e aplicativo</text>
+  <text class="b xs muted" x="58" y="176">organizadores · participantes</text>
+
+  <!-- API Gateway regional -->
+  <rect x="280" y="95" width="920" height="88" rx="16" fill="#241b4a" stroke="#b3a0ff" stroke-opacity="0.65" />
+  <text class="t h2" x="302" y="124">Amazon API Gateway (HTTPS) + AWS WAF [ext.]</text>
+  <text class="b xs muted" x="302" y="146">entrada regional · TLS 1.3 · rate limiting e proteção contra abuso · token JWT emitido pelo serviço de autenticação</text>
+  <text class="b xs muted" x="302" y="166">único ponto público do serviço — nenhuma instância ou função de aplicação com IP público</text>
+  <line x1="240" y1="148" x2="276" y2="148" stroke="#93a8ff" stroke-width="2" marker-end="url(#ah)" />
+
+  <!-- VPC -->
+  <rect x="280" y="205" width="920" height="620" rx="20" fill="#0d0d1a" fill-opacity="0.55" stroke="#6d4aff" stroke-opacity="0.6" stroke-dasharray="8 6" />
+  <text class="t h3" x="300" y="232" fill="#b3a0ff">VPC 10.0.0.0/16 — região sa-east-1</text>
+  <text class="b xs muted" x="1180" y="232" text-anchor="end">sem EC2: serviços serverless</text>
+
+  <!-- barramento de invocação -->
+  <line x1="320" y1="262" x2="1140" y2="262" stroke="#93a8ff" stroke-opacity="0.5" stroke-width="2" stroke-dasharray="4 6" />
+  <text class="b xs muted" x="320" y="254">invocação dos microsserviços (API Gateway → Lambda dentro da VPC, sem trafegar pela internet)</text>
+
+  <!-- AZ a -->
+  <rect x="300" y="280" width="430" height="520" rx="16" fill="none" stroke="#f5f5fb" stroke-opacity="0.14" stroke-dasharray="4 5" />
+  <text class="t h3" x="318" y="304">Availability Zone a</text>
+
+  <rect x="320" y="320" width="390" height="120" rx="12" fill="#12121f" stroke="#93a8ff" stroke-opacity="0.45" />
+  <text class="b xs" x="334" y="342" fill="#93a8ff">sub-rede pública · 10.0.1.0/24</text>
+  <rect x="490" y="355" width="200" height="66" rx="10" fill="#1e1e38" stroke="#93a8ff" stroke-opacity="0.6" />
+  <text class="b h3" x="504" y="382">NAT Gateway</text>
+  <text class="b xs muted" x="504" y="400">saída única para a internet</text>
+
+  <rect x="320" y="460" width="390" height="190" rx="12" fill="#12121f" stroke="#4fd6c4" stroke-opacity="0.45" />
+  <text class="b xs" x="334" y="482" fill="#4fd6c4">sub-rede privada de aplicação · 10.0.2.0/24</text>
+  <rect x="334" y="495" width="116" height="42" rx="9" fill="#0e332f" stroke="#4fd6c4" stroke-opacity="0.55" />
+  <text class="b xs" x="346" y="520">Autenticação</text>
+  <rect x="458" y="495" width="116" height="42" rx="9" fill="#0e332f" stroke="#4fd6c4" stroke-opacity="0.55" />
+  <text class="b xs" x="470" y="520">Eventos</text>
+  <rect x="582" y="495" width="116" height="42" rx="9" fill="#0e332f" stroke="#4fd6c4" stroke-opacity="0.55" />
+  <text class="b xs" x="594" y="520">Ingressos</text>
+  <rect x="334" y="545" width="116" height="42" rx="9" fill="#0e332f" stroke="#4fd6c4" stroke-opacity="0.55" />
+  <text class="b xs" x="346" y="570">Pagamentos</text>
+  <rect x="458" y="545" width="116" height="42" rx="9" fill="#0e332f" stroke="#4fd6c4" stroke-opacity="0.55" />
+  <text class="b xs" x="470" y="570">Notificações</text>
+  <rect x="582" y="545" width="116" height="42" rx="9" fill="#0e332f" stroke="#4fd6c4" stroke-opacity="0.55" />
+  <text class="b xs" x="594" y="570">Inscrições</text>
+  <text class="b xs muted" x="334" y="616">AWS Lambda com VPC ENI (subnet groups) — sem servidor para gerenciar</text>
+
+  <rect x="320" y="670" width="390" height="110" rx="12" fill="#12121f" stroke="#f6b755" stroke-opacity="0.45" />
+  <text class="b xs" x="334" y="692" fill="#f6b755">sub-rede privada de dados · 10.0.3.0/24</text>
+  <rect x="334" y="702" width="180" height="58" rx="10" fill="#3a2a0f" stroke="#f6b755" stroke-opacity="0.55" />
+  <text class="b xs" x="346" y="726">RDS Aurora</text>
+  <text class="b xs muted" x="346" y="744">primário (escrita)</text>
+  <rect x="530" y="702" width="170" height="58" rx="10" fill="#3a2a0f" stroke="#f6b755" stroke-opacity="0.55" />
+  <text class="b xs" x="542" y="726">réplica de leitura</text>
+  <text class="b xs muted" x="542" y="744">mesma AZ</text>
+
+  <!-- AZ b -->
+  <rect x="760" y="280" width="420" height="520" rx="16" fill="none" stroke="#f5f5fb" stroke-opacity="0.14" stroke-dasharray="4 5" />
+  <text class="t h3" x="778" y="304">Availability Zone b</text>
+
+  <rect x="780" y="320" width="380" height="120" rx="12" fill="#12121f" stroke="#93a8ff" stroke-opacity="0.45" />
+  <text class="b xs" x="794" y="342" fill="#93a8ff">sub-rede pública · 10.0.100.0/24</text>
+  <rect x="940" y="355" width="200" height="66" rx="10" fill="#1e1e38" stroke="#93a8ff" stroke-opacity="0.6" />
+  <text class="b h3" x="954" y="382">NAT Gateway</text>
+  <text class="b xs muted" x="954" y="400">redundância de saída</text>
+
+  <rect x="780" y="460" width="380" height="190" rx="12" fill="#12121f" stroke="#4fd6c4" stroke-opacity="0.45" />
+  <text class="b xs" x="794" y="482" fill="#4fd6c4">sub-rede privada de aplicação · 10.0.101.0/24</text>
+  <rect x="794" y="495" width="350" height="42" rx="9" fill="#0e332f" stroke="#4fd6c4" stroke-opacity="0.55" />
+  <text class="b xs" x="806" y="520">Lambda — cotas isoladas por AZ (reserva de concorrência)</text>
+  <rect x="794" y="545" width="350" height="42" rx="9" fill="#1c2350" stroke="#93a8ff" stroke-opacity="0.55" />
+  <text class="b xs" x="806" y="570">ECS Fargate — worker de notificações (fila, tarefas longas)</text>
+  <text class="b xs muted" x="794" y="616">limite de 15 min do Lambda (Unidade II, p. 66) justify o Fargate neste caso</text>
+
+  <rect x="780" y="670" width="380" height="110" rx="12" fill="#12121f" stroke="#f6b755" stroke-opacity="0.45" />
+  <text class="b xs" x="794" y="692" fill="#f6b755">sub-rede privada de dados · 10.0.102.0/24</text>
+  <rect x="794" y="702" width="350" height="58" rx="10" fill="#3a2a0f" stroke="#f6b755" stroke-opacity="0.55" />
+  <text class="b xs" x="806" y="726">RDS Aurora — réplica / failover automático</text>
+  <text class="b xs muted" x="806" y="744">dados consistentes entre AZs</text>
+
+  <!-- conexões -->
+  <path d="M 308 262 V 500 H 316" fill="none" stroke="#93a8ff" stroke-width="2" marker-end="url(#ah)" />
+  <path d="M 748 262 V 500 H 776" fill="none" stroke="#93a8ff" stroke-width="2" marker-end="url(#ah)" />
+  <line x1="420" y1="650" x2="420" y2="696" stroke="#f6b755" stroke-width="2" marker-end="url(#aho)" />
+  <line x1="970" y1="650" x2="970" y2="696" stroke="#f6b755" stroke-width="2" marker-end="url(#aho)" />
+  <path d="M 490 415 H 255 V 862 H 274" fill="none" stroke="#f6b755" stroke-opacity="0.75" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#aho)" />
+
+  <!-- internet / igw -->
+  <rect x="280" y="836" width="560" height="62" rx="14" fill="#15152a" stroke="#f6b755" stroke-opacity="0.5" />
+  <text class="b h3" x="300" y="862">Internet Gateway (anexado à VPC) → Internet / APIs de terceiros</text>
+  <text class="b xs muted" x="300" y="882">pagamentos · e-mail · SMS · webhooks — a saída da VPC acontece somente pelo NAT Gateway</text>
+
+  <rect x="860" y="836" width="340" height="62" rx="14" fill="#12121f" stroke="#f5f5fb" stroke-opacity="0.14" />
+  <text class="b h3" x="880" y="860">Camadas de Security Group</text>
+  <text class="b xs muted" x="880" y="880">edge 443 → app 443 → dados 5432 (do SG do banco)</text>
+
+  <rect x="280" y="912" width="920" height="48" rx="14" fill="#12121f" stroke="#f5f5fb" stroke-opacity="0.12" />
+  <text class="b xs muted" x="300" y="932">IAM: role por serviço (menor privilégio) · NACLs por sub-rede · Secrets Manager [ext.] para credenciais · CloudWatch e CloudTrail para auditoria</text>
+  <text class="b xs muted" x="300" y="950">dados com criptografia em repouso e em trânsito · nenhum recurso de aplicação exposto à internet</text>
+</svg>

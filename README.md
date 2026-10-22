@@ -11,6 +11,10 @@ Infográfico interativo em português sobre a cultura DevOps, seus princípios (
 | `/4P-Devops/` | Infográfico: hero, intro Silos × Time integrado, história, fundamentos (CAMS), as 3 maneiras, exemplos, quiz |
 | `/4P-Devops/reflexao/` | Relato de reflexão com palavras-chave destacadas por tema |
 
+## Estudo de caso — arquitetura AWS
+
+Em [`estudo-de-caso/`](estudo-de-caso/estudo-de-caso.md): desenho de arquitetura de redes para um sistema de gerenciamento de eventos (~100 mil chamadas/dia, abrangência local com potencial mundial), com visão global (`arquitetura-global.svg`) e detalhe de VPC por região (`arquitetura-vpc.svg`), além da justificativa em dois parágrafos.
+
 ## Stack
 
 - React 18 + Vite 5
