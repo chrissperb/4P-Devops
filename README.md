@@ -15,6 +15,10 @@ Infográfico interativo em português sobre a cultura DevOps, seus princípios (
 
 Em [`estudo-de-caso/`](estudo-de-caso/estudo-de-caso.md): desenho de arquitetura de redes para um sistema de gerenciamento de eventos (~100 mil chamadas/dia, abrangência local com potencial mundial), com visão global (`arquitetura-global.svg`) e detalhe de VPC por região (`arquitetura-vpc.svg`), além da justificativa em dois parágrafos.
 
+## Atividade III — Infraestrutura como código (CloudFormation)
+
+Em [`atividade-iii-cloudformation/`](atividade-iii-cloudformation/README.md): template único `template.yaml` que provisiona VPC com duas sub-redes, instância EC2 (Amazon Linux 2023 + nginx), Application Load Balancer e banco RDS MySQL privado, com Security Groups encadeados, IAM para SSM Session Manager e senha gerenciada pelo Secrets Manager. O README traz diagrama, passo a passo pelo console e pela CLI, mapa recurso→linha do template, justificativas e instruções de limpeza.
+
 ## Stack
 
 - React 18 + Vite 5
