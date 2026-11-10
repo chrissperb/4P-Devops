@@ -1,0 +1,613 @@
+# =============================================================================
+# template.yaml — Infraestrutura AWS para a Atividade III (DevOps)
+#
+# O que esta pilha (stack) cria, em uma única unidade gerenciável:
+#   1. Uma VPC com duas sub-redes públicas em Zonas de Disponibilidade (AZs)
+#      diferentes, Internet Gateway e tabela de rotas;
+#   2. Uma instância EC2 Amazon Linux 2023 rodando nginx;
+#   3. Um Application Load Balancer (ALB) que encaminha HTTP:80 para a EC2;
+#   4. Um banco de dados Amazon RDS MySQL 8.0 privado, acessível apenas pela EC2.
+#
+# Referência principal: material da disciplina, Unidade III
+# (Infraestrutura como código, cap. 1, p. 3–7; anatomia do template do AWS
+# CloudFormation, cap. 2, p. 8–10; scripts auxiliares cfn-init/cfn-signal,
+# cap. 3, p. 36–37).
+#
+# Como ler este arquivo: cada bloco tem um comentário acima explicando o que
+# ele faz. Comentários começam com "#" e são ignorados pelo CloudFormation.
+# =============================================================================
+
+# Versão do formato do template. "2010-09-09" é a única versão aceita hoje;
+# ela não indica a data do seu arquivo, e sim a versão da linguagem do serviço.
+AWSTemplateFormatVersion: '2010-09-09'
+
+# Texto livre que aparece na lista de pilhas do console AWS. Serve para
+# identificar rapidamente o que a pilha provisiona.
+Description: |
+  Atividade III - DevOps: VPC com 2 sub-redes publicas, instancia EC2 com nginx, Application Load Balancer encaminhando HTTP para a EC2 e banco RDS MySQL privado. Tudo criado e destruido por CloudFormation.
+
+# -----------------------------------------------------------------------------
+# PARAMETERS (parâmetros)
+# Entradas pedidas ao usuário no momento do deploy. O material (p. 10) explica
+# que parâmetros permitem reaproveitar o mesmo template em contas/ambientes
+# diferentes sem editar o arquivo.
+# -----------------------------------------------------------------------------
+Parameters:
+
+  # Prefixo usado no nome de todos os recursos. Evita conflito se a mesma
+  # pessoa criar duas pilhas na mesma conta/região.
+  ProjectName:
+    Type: String
+    Default: devops-iii
+    MinLength: 3
+    MaxLength: 20
+    AllowedPattern: ^[a-z0-9-]+$
+    ConstraintDescription: Use apenas letras minusculas, numeros e hifen.
+    Description: 'Prefixo dos nomes dos recursos (ex.: devops-iii).'
+
+  # Ambiente lógico. Controla tamanho das máquinas e proteções extras.
+  # AllowedValues faz o CloudFormation recusar qualquer outro valor antes
+  # de criar qualquer recurso (validação antecipada).
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+    Description: dev = mais barato e descartável; prod = maior e protegido.
+
+  # Nome do banco criado dentro da instância RDS. Precisa começar com letra.
+  DBName:
+    Type: String
+    Default: appdb
+    AllowedPattern: ^[a-zA-Z][a-zA-Z0-9]*$
+    MinLength: 1
+    MaxLength: 64
+    Description: 'Nome do banco criado no RDS (ex.: appdb).'
+
+  # Usuário administrador do banco. "admin" é reservado pelo RDS, por isso
+  # usamos "dbadmin". A SENHA não é parâmetro: ela é gerada e guardada
+  # automaticamente pelo AWS Secrets Manager (ver ManageMasterUserPassword).
+  DBUsername:
+    Type: String
+    Default: dbadmin
+    AllowedPattern: ^[a-zA-Z][a-zA-Z0-9_]*$
+    MinLength: 1
+    MaxLength: 16
+    Description: Usuario master do MySQL (a senha e gerada pelo Secrets Manager).
+
+  # Faixa de IPs autorizada a acessar o Load Balancer pela internet.
+  # 0.0.0.0/0 = qualquer origem. Em produção, restrinja ao IP da sua empresa.
+  AllowedHttpCidr:
+    Type: String
+    Default: 0.0.0.0/0
+    AllowedPattern: ^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$
+    Description: 'CIDR autorizado a acessar o ALB na porta 80 (ex.: 203.0.113.10/32).'
+
+# -----------------------------------------------------------------------------
+# MAPPINGS (mapeamentos)
+# Tabela estática de valores, consultada com Fn::FindInMap. O material (p. 9)
+# descreve mapeamentos como "variáveis estáticas; pares de valores-chave".
+# Aqui ele escolhe o tamanho das máquinas conforme o ambiente, mantendo os
+# tipos de instância fora da lógica dos recursos.
+# -----------------------------------------------------------------------------
+Mappings:
+
+  # Chave de 1º nível: nome do ambiente. Chave de 2º nível: atributo.
+  EnvironmentSizing:
+    dev:
+      InstanceType: t3.micro
+      DBInstanceClass: db.t3.micro
+    prod:
+      InstanceType: t3.small
+      DBInstanceClass: db.t3.small
+
+# -----------------------------------------------------------------------------
+# CONDITIONS (condições)
+# O material (p. 9) descreve condições como controles que determinam se e
+# quando recursos/propriedades específicas são criados ou atualizados.
+# -----------------------------------------------------------------------------
+Conditions:
+
+  # Verdadeiro apenas quando o parâmetro Environment vale "prod".
+  # Usada para ligar Multi-AZ, backup maior e proteção contra exclusão.
+  IsProd: !Equals
+    - !Ref Environment
+    - prod
+
+# -----------------------------------------------------------------------------
+# RESOURCES (recursos) — seção obrigatória do template.
+# A ordem em que aparecem aqui NÃO define a ordem de criação: o CloudFormation
+# monta o grafo de dependências a partir de Ref/GetAtt/DependsOn (material p. 5:
+# "as dependências implícitas/explícitas podem ser usadas para garantir a
+# ordem de criação").
+# -----------------------------------------------------------------------------
+Resources:
+
+  # ===========================================================================
+  # 1. REDE (VPC)
+  # ===========================================================================
+
+  # VPC: a "rede particular" isolada onde todos os outros recursos vivem.
+  # 10.0.0.0/16 dá 65.536 endereços IP para distribuir nas sub-redes.
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      # Faixa de IPs da VPC (RFC 1918, faixa privada).
+      CidrBlock: 10.0.0.0/16
+      # Permite que a AWS resolva nomes DNS dentro da VPC.
+      EnableDnsSupport: true
+      # Dá nome DNS público às instâncias com IP público (necessário para
+      # o ALB registrar a instância e para o endpoint do RDS resolver).
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-vpc
+
+  # Internet Gateway: a "porta de saída" da VPC para a internet.
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-igw
+
+  # Anexa o Internet Gateway à VPC. Sem este recurso o gateway existe, mas
+  # não está conectado a nada. O Ref abaixo cria a dependência implícita.
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # Sub-rede pública nº 1, na primeira Zona de Disponibilidade da região.
+  # !GetAZs "" devolve a lista de AZs; !Select [0, ...] pega a primeira.
+  # "MapPublicIpOnLaunch: true" faz instâncias lançadas aqui receberem IP público.
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.0.0/24
+      AvailabilityZone: !Select
+        - 0
+        - !GetAZs ''
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-public-1a
+
+  # Sub-rede pública nº 2, em OUTRA Zona de Disponibilidade.
+  # Isto é obrigatório: o Application Load Balancer exige pelo menos duas
+  # sub-redes em AZs diferentes para poder continuar no ar se uma AZ falhar.
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select
+        - 1
+        - !GetAZs ''
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-public-1b
+
+  # Tabela de rotas: conjunto de regras "para onde mandar o tráfego".
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-rtb-public
+
+  # Rota padrão: todo tráfego que não é da VPC (0.0.0.0/0) vai para o
+  # Internet Gateway. DependsOn garante que o gateway já esteja anexado
+  # antes da rota ser criada.
+  DefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  # Associação da sub-rede 1 com a tabela de rotas (sem isso ela fica sem rota).
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref RouteTable
+
+  # Associação da sub-rede 2 com a mesma tabela de rotas.
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref RouteTable
+
+  # ===========================================================================
+  # 2. SEGURANÇA (Security Groups)
+  # Cada grupo libera apenas o necessário, e a origem é outro Security Group
+  # (não um CIDR). Isso cria uma "corrente" ALB -> EC2 -> RDS.
+  # ===========================================================================
+
+  # Security Group do Load Balancer: aceita HTTP (porta 80) da internet.
+  AlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Permite HTTP publico na porta 80 do ALB
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        # Porta 80, protocolo TCP, origem = faixa informada no parâmetro.
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: !Ref AllowedHttpCidr
+          Description: HTTP publico para o ALB
+      SecurityGroupEgress:
+        # Saída liberada: o ALB precisa alcançar a EC2 na porta 80.
+        - IpProtocol: '-1'
+          CidrIp: 0.0.0.0/0
+          Description: Saida livre para encaminhar ao target group
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-sg-alb
+
+  # Security Group da instância EC2: aceita HTTP SOMENTE do Security Group
+  # do ALB. Fonte = SourceSecurityGroupId (referência ao grupo), não um IP.
+  # Consequência: ninguém acessa a EC2 diretamente pela internet.
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Permite HTTP apenas a partir do Security Group do ALB
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref AlbSecurityGroup
+          Description: HTTP vindo do ALB
+      SecurityGroupEgress:
+        # Saída livre: necessário para instalar pacotes (dnf) e para
+        # conversar com o RDS e com o SSM.
+        - IpProtocol: '-1'
+          CidrIp: 0.0.0.0/0
+          Description: Saida para dnf, SSM e RDS
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-sg-ec2
+
+  # Security Group do banco: aceita MySQL (3306) SOMENTE da instância EC2.
+  # O RDS fica em sub-rede pública por simplicidade do exercício, mas com
+  # PubliclyAccessible: false ele NÃO recebe IP público e não é alcançável
+  # de fora da VPC.
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Permite MySQL 3306 apenas a partir da instancia EC2
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref InstanceSecurityGroup
+          Description: MySQL vindo da EC2
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-sg-rds
+
+  # ===========================================================================
+  # 3. ACESSO ADMINISTRATIVO (SSM Session Manager)
+  # Em vez de abrir a porta 22 e criar par de chaves, damos à instância uma
+  # permissão IAM que permite abrir um terminal pelo serviço SSM. Mais seguro:
+  # nenhuma porta de administração fica exposta na internet.
+  # ===========================================================================
+
+  # Papel (role) que a instância assume. Quem pode assumir: o serviço EC2.
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      # Política de confiança: só o serviço EC2 pode "vestir" este papel.
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      # Política gerenciada da AWS com o mínimo para o SSM funcionar.
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-role-ec2
+
+  # Instance Profile: o "envelope" que leva o papel acima até a instância.
+  # A EC2 não aceita um Role diretamente; aceita um InstanceProfile.
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref InstanceRole
+
+  # ===========================================================================
+  # 4. COMPUTAÇÃO (EC2 + nginx)
+  # ===========================================================================
+
+  # A instância Linux que roda o site.
+  WebServer:
+    Type: AWS::EC2::Instance
+    # Metadados lidos pelo cfn-init: o que instalar, quais arquivos criar e
+    # quais serviços subir. Material da disciplina, cap. 3, p. 36–37.
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          # Instala o nginx pelo gerenciador de pacotes do Amazon Linux
+          # (yum é o comando clássico; no AL2023 ele aponta para o dnf).
+          packages:
+            yum:
+              nginx: []
+          # Cria as páginas servidas pelo nginx.
+          files:
+            # Página inicial. O texto __INSTANCE_ID__ é um marcador: ele é
+            # trocado pelo nome real da máquina no UserData (mais abaixo).
+            # Não usamos ${WebServer} aqui porque a instância não pode
+            # referenciar a si mesma (isso criaria uma dependência circular).
+            /usr/share/nginx/html/index.html:
+              content: !Sub |
+                <!DOCTYPE html>
+                <html lang="pt-BR">
+                  <head><meta charset="utf-8"><title>Atividade III - DevOps</title></head>
+                  <body>
+                    <h1>Infraestrutura provisionada com CloudFormation</h1>
+                    <p>Instancia: __INSTANCE_ID__</p>
+                    <p>Pilha: ${AWS::StackName}</p>
+                    <p>Regiao: ${AWS::Region}</p>
+                  </body>
+                </html>
+              mode: '000644'
+              owner: root
+              group: root
+            # Arquivo usado pelo health check do Load Balancer. Responde "ok"
+            # e permite ao ALB saber que a instância está saudável.
+            /usr/share/nginx/html/health.html:
+              content: ok
+              mode: '000644'
+              owner: root
+              group: root
+          # Garante que o nginx está habilitado no boot e rodando agora.
+          services:
+            sysvinit:
+              nginx:
+                enabled: true
+                ensureRunning: true
+    # CreationPolicy: o CloudFormation só considera a instância "criada"
+    # depois que o cfn-signal enviar 1 sinal de sucesso (ou falhar em 10 min).
+    # Isso sincroniza a pilha com a instalação do nginx.
+    CreationPolicy:
+      ResourceSignal:
+        Count: 1
+        Timeout: PT10M
+    Properties:
+      # AMI obtida de um parâmetro público da AWS (SSM). Vantagem: sempre
+      # aponta para a Amazon Linux 2023 mais recente da região, sem ID fixo
+      # que envelhece. Ver justificativa no README.
+      ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}'
+      # Tipo de instância escolhido pela tabela Mappings conforme o ambiente.
+      InstanceType: !FindInMap
+        - EnvironmentSizing
+        - !Ref Environment
+        - InstanceType
+      # Perfil IAM que habilita o SSM Session Manager (acesso sem SSH).
+      IamInstanceProfile: !Ref InstanceProfile
+      # Onde a instância é lançada: sub-rede pública 1 (tem rota para internet).
+      SubnetId: !Ref PublicSubnet1
+      # Firewall da instância: só aceita HTTP do ALB.
+      SecurityGroupIds:
+        - !Ref InstanceSecurityGroup
+      # Script de inicialização executado uma vez, como root, no primeiro boot.
+      UserData: !Base64
+        Fn::Sub: |
+          #!/bin/bash -xe
+          # Instala/atualiza os scripts auxiliares do CloudFormation.
+          dnf install -y aws-cfn-bootstrap
+          # Desliga a saída automática em caso de erro só durante o cfn-init,
+          # para podermos capturar o código de retorno e avisar a pilha.
+          set +e
+          # Executa o que está em Metadata > AWS::CloudFormation::Init
+          # (instala nginx, cria arquivos, sobe serviço). "-v" = verboso.
+          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource WebServer --region ${AWS::Region}
+          # Guarda 0 (sucesso) ou o código de erro do cfn-init.
+          INIT_STATUS=$?
+          set -e
+          # Troca o marcador pelo hostname real da instância. Assim a página
+          # mostra qual máquina respondeu, útil quando houver mais de uma.
+          sed -i "s/__INSTANCE_ID__/$(hostname -f)/" /usr/share/nginx/html/index.html
+          # Avisa o CloudFormation do resultado do cfn-init: 0 = sucesso;
+          # qualquer outro valor faz a pilha falhar e reverter tudo.
+          /opt/aws/bin/cfn-signal -e $INIT_STATUS --stack ${AWS::StackName} --resource WebServer --region ${AWS::Region}
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-web
+
+  # ===========================================================================
+  # 5. LOAD BALANCER (ALB)
+  # ===========================================================================
+
+  # O Load Balancer em si: recebe o tráfego da internet e distribui.
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      # "application" = camada 7 (HTTP/HTTPS), entende rotas e health checks.
+      Type: application
+      # "internet-facing" = recebe tráfego da internet (tem IP público).
+      Scheme: internet-facing
+      # Precisa de pelo menos 2 sub-redes em AZs diferentes.
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      # Firewall do ALB: libera a porta 80.
+      SecurityGroups:
+        - !Ref AlbSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-alb
+
+  # Target Group: a "lista de destinos" para onde o ALB manda o tráfego,
+  # junto com as regras de health check.
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      # Target group pertence a esta VPC.
+      VpcId: !Ref VPC
+      # Porta e protocolo usados para falar com os destinos.
+      Port: 80
+      Protocol: HTTP
+      # "instance" = os destinos são IDs de instâncias EC2.
+      TargetType: instance
+      # Caminho testado pelo health check (arquivo criado pelo cfn-init).
+      HealthCheckPath: /health.html
+      # Intervalo entre verificações, em segundos.
+      HealthCheckIntervalSeconds: 15
+      # Quantas verificações boas seguidas para marcar como saudável.
+      HealthyThresholdCount: 2
+      # Quantas verificações ruins seguidas para tirar de rotação.
+      UnhealthyThresholdCount: 3
+      # Código HTTP considerado sucesso.
+      Matcher:
+        HttpCode: '200'
+      # O destino é a instância WebServer. O Ref cria a dependência:
+      # o target group só é criado depois que a EC2 existe.
+      Targets:
+        - Id: !Ref WebServer
+          Port: 80
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-tg
+
+  # Listener: a "porta de entrada" do ALB. Recebe na 80 e encaminha para
+  # o target group (que por sua vez aponta para a EC2).
+  HttpListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
+  # ===========================================================================
+  # 6. BANCO DE DADOS (RDS MySQL)
+  # ===========================================================================
+
+  # Grupo de sub-redes do banco: em quais sub-redes o RDS pode ficar.
+  # O RDS exige sub-redes em pelo menos 2 AZs, mesmo em single-AZ.
+  DatabaseSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Sub-redes publicas usadas pelo RDS
+      SubnetIds:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-dbsubnet
+
+  # A instância de banco de dados.
+  Database:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      # Mecanismo: MySQL. Não fixamos EngineVersion de propósito: assim a AWS
+      # usa a versão padrão atual da família MySQL (8.0.x na maioria das
+      # regiões) e o template não quebra quando uma versão é descontinuada.
+      # Para fixar, descomente a linha abaixo com uma versão existente na sua
+      # região (ex.: "8.0.43"):
+      Engine: mysql
+      # EngineVersion: "8.0.43"
+      # Tamanho da máquina do banco, vindo da tabela Mappings.
+      DBInstanceClass: !FindInMap
+        - EnvironmentSizing
+        - !Ref Environment
+        - DBInstanceClass
+      # 20 GB de armazenamento, tipo gp3 (mais barato/rápido que gp2).
+      AllocatedStorage: '20'
+      StorageType: gp3
+      # Nome do banco criado no primeiro boot (parâmetro DBName).
+      DBName: !Ref DBName
+      # Usuário master (parâmetro DBUsername).
+      MasterUsername: !Ref DBUsername
+      # A AWS gera a senha e guarda no Secrets Manager. Nenhuma senha em
+      # texto no template nem no histórico do Git.
+      ManageMasterUserPassword: true
+      # Multi-AZ só em produção: cria uma réplica em outra AZ (custa o dobro).
+      MultiAZ: !If
+        - IsProd
+        - true
+        - false
+      # Backup automático: 7 dias em prod, 1 dia em dev.
+      BackupRetentionPeriod: !If
+        - IsProd
+        - 7
+        - 1
+      # Impede exclusão acidental em produção; em dev pode ser excluído.
+      DeletionProtection: !If
+        - IsProd
+        - true
+        - false
+      # NÃO recebe IP público: só é alcançável de dentro da VPC.
+      PubliclyAccessible: false
+      # Firewall do banco: apenas a EC2 pode conectar.
+      VPCSecurityGroups:
+        - !Ref DatabaseSecurityGroup
+      # Em quais sub-redes o banco pode ser colocado.
+      DBSubnetGroupName: !Ref DatabaseSubnetGroup
+      # Aplica correções menores automaticamente na janela de manutenção.
+      AutoMinorVersionUpgrade: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-mysql
+
+# -----------------------------------------------------------------------------
+# OUTPUTS (saídas)
+# Valores exibidos ao final do deploy e na aba "Outputs" da pilha. O material
+# (p. 9) descreve saídas como valores personalizados criados pelo template
+# (URLs, nomes de usuário etc.).
+# -----------------------------------------------------------------------------
+Outputs:
+
+  # URL pronta para abrir no navegador.
+  WebsiteUrl:
+    Description: URL publica do site (abra no navegador)
+    Value: !Sub http://${LoadBalancer.DNSName}
+
+  # Nome DNS do ALB, sem protocolo.
+  LoadBalancerDnsName:
+    Description: Nome DNS do Application Load Balancer
+    Value: !GetAtt LoadBalancer.DNSName
+
+  # ID da instância EC2 (usado no comando de acesso via SSM).
+  InstanceId:
+    Description: ID da instancia EC2
+    Value: !Ref WebServer
+
+  # Comando para abrir um terminal na instância sem SSH.
+  SsmSessionCommand:
+    Description: Comando para abrir terminal na EC2 via SSM Session Manager
+    Value: !Sub aws ssm start-session --target ${WebServer}
+
+  # Endereço do banco no formato host:porta.
+  DatabaseEndpoint:
+    Description: Endpoint (host:porta) do banco MySQL
+    Value: !GetAtt Database.Endpoint.Address
+
+  # Nome do banco e usuário master, para conferência.
+  DatabaseName:
+    Description: Nome do banco criado
+    Value: !Ref DBName
+
+  # Onde está a senha do banco (gerada automaticamente).
+  DatabaseSecretArn:
+    Description: ARN do segredo no Secrets Manager com usuario e senha do banco
+    Value: !GetAtt Database.MasterUserSecret.SecretArn
