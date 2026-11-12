@@ -319,6 +319,18 @@ Resources:
       # Política gerenciada da AWS com o mínimo para o SSM funcionar.
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      # A instância usa cfn-signal no UserData para avisar o CloudFormation
+      # (CreationPolicy). Sem esta permissão o sinal falha e a pilha reverte.
+      Policies:
+        - PolicyName: CloudFormationSignal
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudformation:SignalResource
+                  - cloudformation:DescribeStackResource
+                Resource: !Sub 'arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${AWS::StackName}/*'
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-role-ec2

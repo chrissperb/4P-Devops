@@ -6,6 +6,8 @@
 
 **Entrega:** um único arquivo [`template.yaml`](template.yaml) que cria, em uma pilha do CloudFormation, uma VPC, uma instância EC2 com nginx, um Application Load Balancer e um banco Amazon RDS MySQL.
 
+> **Deploy automatizado (Atividade IV):** esta stack é aplicada pelo pipeline em [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml), com plano em pull requests e apply aprovado na `main`. Instruções em [`atividade-iv-cicd/README.md`](../atividade-iv-cicd/README.md).
+
 ---
 
 ## 1. O que este projeto cria

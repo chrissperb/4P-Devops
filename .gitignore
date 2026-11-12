@@ -7,3 +7,6 @@ dist-ssr
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Estado local do bootstrap AWS (contém ExternalId; nunca comitar)
+atividade-iv-cicd/.bootstrap.env
