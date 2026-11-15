@@ -2,11 +2,15 @@
 # template.yaml — Infraestrutura AWS para a Atividade III (DevOps)
 #
 # O que esta pilha (stack) cria, em uma única unidade gerenciável:
-#   1. Uma VPC com duas sub-redes públicas em Zonas de Disponibilidade (AZs)
-#      diferentes, Internet Gateway e tabela de rotas;
+#   1. Uma VPC com duas sub-redes públicas e duas sub-redes privadas, em Zonas
+#      de Disponibilidade (AZs) diferentes, Internet Gateway, tabela de rotas
+#      pública e tabela de rotas privada (sem rota para a internet);
 #   2. Uma instância EC2 Amazon Linux 2023 rodando nginx;
-#   3. Um Application Load Balancer (ALB) que encaminha HTTP:80 para a EC2;
-#   4. Um banco de dados Amazon RDS MySQL 8.0 privado, acessível apenas pela EC2.
+#   3. Um Application Load Balancer (ALB) que encaminha HTTP:80 para a EC2 e,
+#      quando CertificateArn e DomainName sao informados, tambem HTTPS:443
+#      (nesse caso a porta 80 redireciona para HTTPS);
+#   4. Um banco de dados Amazon RDS MySQL 8.0 em sub-redes privadas, sem IP
+#      público e acessível apenas pela EC2.
 #
 # Referência principal: material da disciplina, Unidade III
 # (Infraestrutura como código, cap. 1, p. 3–7; anatomia do template do AWS
@@ -24,7 +28,7 @@ AWSTemplateFormatVersion: '2010-09-09'
 # Texto livre que aparece na lista de pilhas do console AWS. Serve para
 # identificar rapidamente o que a pilha provisiona.
 Description: |
-  Atividade III - DevOps: VPC com 2 sub-redes publicas, instancia EC2 com nginx, Application Load Balancer encaminhando HTTP para a EC2 e banco RDS MySQL privado. Tudo criado e destruido por CloudFormation.
+  Atividade III - DevOps: VPC com 2 sub-redes publicas e 2 sub-redes privadas, instancia EC2 com nginx, Application Load Balancer em HTTP com HTTPS opcional (quando certificado ACM e dominio sao informados) e banco RDS MySQL em sub-redes privadas, sem NAT Gateway. Tudo criado e destruido por CloudFormation.
 
 # -----------------------------------------------------------------------------
 # PARAMETERS (parâmetros)
@@ -78,11 +82,28 @@ Parameters:
 
   # Faixa de IPs autorizada a acessar o Load Balancer pela internet.
   # 0.0.0.0/0 = qualquer origem. Em produção, restrinja ao IP da sua empresa.
+  # Vale para a porta 80 e, quando HTTPS estiver ativo, tambem para a 443.
   AllowedHttpCidr:
     Type: String
     Default: 0.0.0.0/0
     AllowedPattern: ^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$
-    Description: 'CIDR autorizado a acessar o ALB na porta 80 (ex.: 203.0.113.10/32).'
+    Description: 'CIDR autorizado a acessar o ALB nas portas 80 e 443 (ex.: 203.0.113.10/32).'
+
+  # ARN do certificado no AWS Certificate Manager (ACM) da regiao da pilha.
+  # O certificado NAO e criado por este template: ele precisa existir antes do
+  # deploy (validacao DNS ja concluida). Vazio = HTTPS desligado.
+  CertificateArn:
+    Type: String
+    Default: ''
+    Description: 'ARN do certificado ACM usado pelo listener HTTPS do ALB (vazio = sem HTTPS).'
+
+  # Nome DNS publico coberto pelo certificado e que deve apontar para o ALB.
+  # Usado no redirect de HTTP:80 para HTTPS:443 e na saida WebsiteUrl.
+  # Precisa ser preenchido junto com CertificateArn; sozinho nao liga HTTPS.
+  DomainName:
+    Type: String
+    Default: ''
+    Description: 'Dominio coberto pelo certificado e apontado para o ALB (vazio = sem HTTPS).'
 
 # -----------------------------------------------------------------------------
 # MAPPINGS (mapeamentos)
@@ -114,6 +135,20 @@ Conditions:
   IsProd: !Equals
     - !Ref Environment
     - prod
+
+  # Verdadeiro apenas quando CertificateArn E DomainName estao preenchidos.
+  # Com qualquer um deles vazio, nada de HTTPS e criado: nao existe listener
+  # 443, nao existe regra 443 no Security Group e a porta 80 continua com o
+  # forward para o target group (comportamento anterior preservado).
+  HasHttps: !And
+    - !Not
+      - !Equals
+        - !Ref CertificateArn
+        - ''
+    - !Not
+      - !Equals
+        - !Ref DomainName
+        - ''
 
 # -----------------------------------------------------------------------------
 # RESOURCES (recursos) — seção obrigatória do template.
@@ -192,6 +227,38 @@ Resources:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-public-1b
 
+  # Sub-rede privada nº 1, na mesma AZ da sub-rede pública 1.
+  # Sem IP público e sem rota para o Internet Gateway: só recebe tráfego
+  # interno da VPC. É onde o RDS é lançado.
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select
+        - 0
+        - !GetAZs ''
+      # Nada de IP público: o banco não é alcançável de fora da VPC.
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-private-1a
+
+  # Sub-rede privada nº 2, em OUTRA Zona de Disponibilidade.
+  # O RDS exige sub-redes em pelo menos duas AZs, mesmo em single-AZ.
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.3.0/24
+      AvailabilityZone: !Select
+        - 1
+        - !GetAZs ''
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-private-1b
+
   # Tabela de rotas: conjunto de regras "para onde mandar o tráfego".
   RouteTable:
     Type: AWS::EC2::RouteTable
@@ -226,13 +293,40 @@ Resources:
       SubnetId: !Ref PublicSubnet2
       RouteTableId: !Ref RouteTable
 
+  # Tabela de rotas das sub-redes privadas. Ela tem apenas a rota local da VPC,
+  # criada automaticamente pela AWS. Não existe AWS::EC2::Route aqui de
+  # propósito: sem 0.0.0.0/0 não há caminho para o Internet Gateway (e não
+  # criamos NAT Gateway, porque o RDS não precisa de saída para a internet).
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-rtb-private
+
+  # Associação da sub-rede privada 1 com a tabela de rotas privada.
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  # Associação da sub-rede privada 2 com a mesma tabela de rotas privada.
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
   # ===========================================================================
   # 2. SEGURANÇA (Security Groups)
   # Cada grupo libera apenas o necessário, e a origem é outro Security Group
   # (não um CIDR). Isso cria uma "corrente" ALB -> EC2 -> RDS.
   # ===========================================================================
 
-  # Security Group do Load Balancer: aceita HTTP (porta 80) da internet.
+  # Security Group do Load Balancer: aceita HTTP (porta 80) da internet e,
+  # quando HTTPS esta ativo, tambem HTTPS (porta 443).
   AlbSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -253,6 +347,20 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-sg-alb
+
+  # Regra extra do Security Group do ALB: libera HTTPS (443) a partir do mesmo
+  # CIDR do parametro AllowedHttpCidr. Existe apenas quando HasHttps e
+  # verdadeiro, para nao deixar a porta 443 aberta em um ALB sem listener 443.
+  AlbHttpsIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Condition: HasHttps
+    Properties:
+      GroupId: !Ref AlbSecurityGroup
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      CidrIp: !Ref AllowedHttpCidr
+      Description: HTTPS publico para o ALB
 
   # Security Group da instância EC2: aceita HTTP SOMENTE do Security Group
   # do ALB. Fonte = SourceSecurityGroupId (referência ao grupo), não um IP.
@@ -279,9 +387,8 @@ Resources:
           Value: !Sub ${ProjectName}-${Environment}-sg-ec2
 
   # Security Group do banco: aceita MySQL (3306) SOMENTE da instância EC2.
-  # O RDS fica em sub-rede pública por simplicidade do exercício, mas com
-  # PubliclyAccessible: false ele NÃO recebe IP público e não é alcançável
-  # de fora da VPC.
+  # O RDS fica nas sub-redes privadas: além deste firewall, a tabela de rotas
+  # privada não oferece nenhum caminho de saída para a internet.
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -459,7 +566,7 @@ Resources:
       Subnets:
         - !Ref PublicSubnet1
         - !Ref PublicSubnet2
-      # Firewall do ALB: libera a porta 80.
+      # Firewall do ALB: libera a porta 80 e, com HTTPS ativo, a porta 443.
       SecurityGroups:
         - !Ref AlbSecurityGroup
       Tags:
@@ -500,12 +607,38 @@ Resources:
 
   # Listener: a "porta de entrada" do ALB. Recebe na 80 e encaminha para
   # o target group (que por sua vez aponta para a EC2).
+  # Com HTTPS ativo (HasHttps), a porta 80 passa a redirecionar para HTTPS:443
+  # no dominio informado, com HTTP_301 (redirect permanente). Sem HTTPS, o
+  # forward para o target group continua exatamente como antes.
   HttpListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       LoadBalancerArn: !Ref LoadBalancer
       Port: 80
       Protocol: HTTP
+      DefaultActions: !If
+        - HasHttps
+        - - Type: redirect
+            RedirectConfig:
+              Protocol: HTTPS
+              Port: '443'
+              Host: !Ref DomainName
+              StatusCode: HTTP_301
+        - - Type: forward
+            TargetGroupArn: !Ref TargetGroup
+
+  # Listener HTTPS: existe apenas quando HasHttps e verdadeiro. Usa o
+  # certificado ACM ja criado fora da pilha (o template nao cria certificado)
+  # e encaminha para o mesmo target group da porta 80.
+  HttpsListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: HasHttps
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Ref CertificateArn
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref TargetGroup
@@ -515,17 +648,18 @@ Resources:
   # ===========================================================================
 
   # Grupo de sub-redes do banco: em quais sub-redes o RDS pode ficar.
-  # O RDS exige sub-redes em pelo menos 2 AZs, mesmo em single-AZ.
-  DatabaseSubnetGroup:
+  # Usa APENAS as sub-redes privadas; o RDS exige sub-redes em pelo menos
+  # 2 AZs, mesmo em single-AZ.
+  DatabaseSubnetGroupPrivate:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupDescription: Sub-redes publicas usadas pelo RDS
+      DBSubnetGroupDescription: Sub-redes privadas usadas pelo RDS
       SubnetIds:
-        - !Ref PublicSubnet1
-        - !Ref PublicSubnet2
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
       Tags:
         - Key: Name
-          Value: !Sub ${ProjectName}-${Environment}-dbsubnet
+          Value: !Sub ${ProjectName}-${Environment}-dbsubnet-private
 
   # A instância de banco de dados.
   Database:
@@ -573,8 +707,8 @@ Resources:
       # Firewall do banco: apenas a EC2 pode conectar.
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
-      # Em quais sub-redes o banco pode ser colocado.
-      DBSubnetGroupName: !Ref DatabaseSubnetGroup
+      # Em quais sub-redes o banco pode ser colocado: apenas as privadas.
+      DBSubnetGroupName: !Ref DatabaseSubnetGroupPrivate
       # Aplica correções menores automaticamente na janela de manutenção.
       AutoMinorVersionUpgrade: true
       Tags:
@@ -589,10 +723,14 @@ Resources:
 # -----------------------------------------------------------------------------
 Outputs:
 
-  # URL pronta para abrir no navegador.
+  # URL pronta para abrir no navegador: HTTPS no dominio quando HasHttps;
+  # caso contrario, HTTP no DNS do ALB (comportamento anterior).
   WebsiteUrl:
     Description: URL publica do site (abra no navegador)
-    Value: !Sub http://${LoadBalancer.DNSName}
+    Value: !If
+      - HasHttps
+      - !Sub https://${DomainName}
+      - !Sub http://${LoadBalancer.DNSName}
 
   # Nome DNS do ALB, sem protocolo.
   LoadBalancerDnsName:

@@ -19,7 +19,7 @@ Em [`estudo-de-caso/`](estudo-de-caso/estudo-de-caso.md): desenho de arquitetura
 
 ## Atividade III — Infraestrutura como código (CloudFormation)
 
-Em [`atividade-iii-cloudformation/`](atividade-iii-cloudformation/README.md): template único `template.yaml` que provisiona VPC com duas sub-redes, instância EC2 (Amazon Linux 2023 + nginx), Application Load Balancer e banco RDS MySQL privado, com Security Groups encadeados, IAM para SSM Session Manager e senha gerenciada pelo Secrets Manager. O README traz diagrama, passo a passo pelo console e pela CLI, mapa recurso→linha do template, justificativas e instruções de limpeza.
+Em [`atividade-iii-cloudformation/`](atividade-iii-cloudformation/README.md): template único `template.yaml` que provisiona VPC com quatro sub-redes (duas públicas e duas privadas), instância EC2 (Amazon Linux 2023 + nginx), Application Load Balancer e banco RDS MySQL privado, com Security Groups encadeados, IAM para SSM Session Manager e senha gerenciada pelo Secrets Manager. O README traz diagrama, passo a passo pelo console e pela CLI, mapa recurso→linha do template, justificativas e instruções de limpeza.
 
 ## Atividade IV — Pipeline CI/CD (GitHub Actions + AWS)
 
