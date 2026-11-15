@@ -25,7 +25,10 @@
 6. **[2026-11-15] CloudFormation `CREATE` change sets leave empty `REVIEW_IN_PROGRESS` stacks**
    Do instead: delete the empty stack after a non-applied plan, and clean it before retrying apply.
 
-7. **[2026-11-15] RDS subnet-group changes can replace the DB instance**
+7. **[2026-11-15] S3 IAM action names differ from the API operation names**
+   Do instead: use `s3:PutEncryptionConfiguration` (not `PutBucketEncryption`) and `s3:PutLifecycleConfiguration` (not `PutBucketLifecycleConfiguration`).
+
+8. **[2026-11-15] RDS subnet-group changes can replace the DB instance**
    Do instead: inspect the change set and take a manual snapshot before any update where data exists.
 
 ## Shell & Command Reliability
