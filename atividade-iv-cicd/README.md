@@ -172,6 +172,8 @@ git push -u origin feature/minha-mudanca
 
 O workflow roda `validate` e `plan`, comenta a tabela de mudanças no PR e não altera a AWS.
 
+> Para uma stack inexistente, o change set `CREATE` cria uma stack temporária em `REVIEW_IN_PROGRESS`. O script apaga essa stack ao final do plano; se uma execução antiga deixou resíduo, o próximo `plan`/`apply` remove antes de recriar.
+
 ### Merge na main (aplicação)
 
 Após o merge, o job `deploy` aguarda a aprovação do environment `production` e então:
@@ -335,6 +337,7 @@ A conta tem US$ 140 em créditos. Configure um spend limit em **AWS Settings →
 | `iam:CreateOpenIDConnectProvider` negado | SCP `iam:*Provider*` | Use access keys (caminho adotado) |
 | `didn't contain changes` | Nada mudou | Tratado como sucesso (`unchanged`) |
 | Stack em `ROLLBACK_COMPLETE` | Criação anterior falhou | `action=destroy` e reaplique |
+| Stack em `REVIEW_IN_PROGRESS` | Plano anterior deixou stack vazia | O script remove no próximo `plan`/`apply`; se necessário, apague a stack vazia |
 | CloudFront 403 após deploy | Objeto ausente ou OAC | Confira o `s3 sync`, o `BucketName` e a invalidação |
 | `AccessDenied` no apply | Permissão faltando na role | Ajuste `iam/deploy-role-policy.json` e rode o bootstrap |
 | `InvalidClientTokenId` / chave expirada | Access key rotacionada/removida | Gere nova com `rotate-key.sh` e atualize os secrets |
