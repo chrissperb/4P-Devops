@@ -23,6 +23,15 @@ usage() {
   sed -n '3,20p' "$0" | sed 's/^# \{0,1\}//'
 }
 
+# Uma change set de CREATE cria uma stack vazia em REVIEW_IN_PROGRESS. Se o
+# plano nao for aplicado, essa stack precisa ser removida para o apply nao
+# falhar tentando atualizar uma stack que nunca foi criada.
+cleanup_review_stack() {
+  echo "==> Removendo stack vazia em REVIEW_IN_PROGRESS: $STACK"
+  aws cloudformation delete-stack --stack-name "$STACK"
+  aws cloudformation wait stack-delete-complete --stack-name "$STACK"
+}
+
 STACK=""
 TEMPLATE=""
 PARAMETERS=""
@@ -65,13 +74,19 @@ CHANGE_SET_ARGS=(
 )
 
 if aws cloudformation describe-stacks --stack-name "$STACK" >/dev/null 2>&1; then
-  MODE="UPDATE"
   STACK_STATUS="$(aws cloudformation describe-stacks --stack-name "$STACK" \
     --query 'Stacks[0].StackStatus' --output text)"
-  if [[ "$STACK_STATUS" == "ROLLBACK_COMPLETE" || "$STACK_STATUS" == *_IN_PROGRESS ]]; then
+  if [[ "$STACK_STATUS" == "REVIEW_IN_PROGRESS" ]]; then
+    # Stack vazia deixada por um plano anterior. Remove para recriar do zero.
+    cleanup_review_stack
+    MODE="CREATE"
+    STACK_STATUS=""
+  elif [[ "$STACK_STATUS" == "ROLLBACK_COMPLETE" || "$STACK_STATUS" == *_IN_PROGRESS ]]; then
     echo "Stack $STACK esta em $STACK_STATUS; nao e possivel atualizar." >&2
     echo "Execute o job destroy ou apague a stack antes de tentar de novo." >&2
     exit 1
+  else
+    MODE="UPDATE"
   fi
 else
   MODE="CREATE"
@@ -107,6 +122,7 @@ if ! aws cloudformation wait change-set-create-complete \
   aws cloudformation describe-change-set --stack-name "$STACK" \
     --change-set-name "$CHANGE_SET" \
     --query '[Status,StatusReason]' --output text >&2 || true
+  [[ "$MODE" == "CREATE" ]] && cleanup_review_stack || true
   exit 1
 fi
 
@@ -142,6 +158,9 @@ if [[ "$APPLY" == "true" ]]; then
 else
   aws cloudformation delete-change-set --stack-name "$STACK" \
     --change-set-name "$CHANGE_SET" >/dev/null 2>&1 || true
+  if [[ "$MODE" == "CREATE" ]]; then
+    cleanup_review_stack
+  fi
   echo "changed" > "$STATUS_FILE"
   echo "==> Plano de $STACK pronto (change set removido; nada aplicado)"
 fi
