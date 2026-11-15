@@ -90,6 +90,21 @@
       "Resource": "arn:aws:s3:::devops-iv-*/*"
     },
     {
+      "Sid": "KMSForArtifactsBucket",
+      "Effect": "Allow",
+      "Action": [
+        "kms:Decrypt",
+        "kms:GenerateDataKey"
+      ],
+      "Resource": "arn:aws:kms:${AWS_REGION}:${ACCOUNT_ID}:key/*",
+      "Condition": {
+        "StringEquals": {
+          "kms:ViaService": "s3.${AWS_REGION}.amazonaws.com",
+          "kms:CallerAccount": "${ACCOUNT_ID}"
+        }
+      }
+    },
+    {
       "Sid": "CloudFront",
       "Effect": "Allow",
       "Action": [

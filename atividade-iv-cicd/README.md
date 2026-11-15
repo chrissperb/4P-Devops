@@ -30,7 +30,7 @@ Duas stacks são gerenciadas:
 | Stack | Template | Conteúdo |
 | --- | --- | --- |
 | `devops-iv-spa` | `atividade-iv-cicd/cloudformation/spa-hosting.yaml` | S3 privado + CloudFront + OAC + CloudFront Function |
-| `devops-iii-dev` | `atividade-iii-cloudformation/template.yaml` | VPC, 2 sub-redes, EC2 com nginx, ALB e RDS MySQL (Atividade III) |
+| `devops-iii-dev` | `atividade-iii-cloudformation/template.yaml` | VPC, 4 sub-redes (2 públicas + 2 privadas), EC2 com nginx, ALB e RDS MySQL em sub-redes privadas (Atividade III) |
 
 ---
 
@@ -167,7 +167,7 @@ Em **Settings → Branches**, proteja `main` exigindo pull request e o check do 
 ```bash
 git switch -c feature/minha-mudanca
 # edite os arquivos
-git push -u main feature/minha-mudanca    # remoto se chama "main"
+git push -u origin feature/minha-mudanca
 ```
 
 O workflow roda `validate` e `plan`, comenta a tabela de mudanças no PR e não altera a AWS.
@@ -340,6 +340,7 @@ A conta tem US$ 140 em créditos. Configure um spend limit em **AWS Settings →
 | `InvalidClientTokenId` / chave expirada | Access key rotacionada/removida | Gere nova com `rotate-key.sh` e atualize os secrets |
 | Job `plan` sem secrets em PR | PR de fork | Rode o plano em branch do próprio repositório |
 | RDS demora > 20 min | Criação inicial | Normal; o job tem 75 min de timeout |
+| Change set da stack III mostra `Replacement` no RDS | Migração do DB subnet group para sub-redes privadas | Em stack com dados, faça snapshot manual e revise o change set antes de aprovar; em `dev` sem dados, recriar é aceitável |
 | Cota de RDS/EC2 | Limite da conta | Apague recursos antigos ou peça aumento |
 
 Logs úteis:
