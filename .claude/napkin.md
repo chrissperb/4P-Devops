@@ -19,7 +19,10 @@
 4. **[2026-11-15] No AWS/GitHub mutations without explicit approval**
    Do instead: implement and validate locally; do not create/update/delete stacks, push, or open PRs unless the user authorizes it.
 
-5. **[2026-11-15] RDS subnet-group changes can replace the DB instance**
+5. **[2026-11-15] IAM managed policy hard limit is 6144 characters**
+   Do instead: measure the rendered/minified policy before bootstrap; remove unused actions or split into multiple managed policies.
+
+6. **[2026-11-15] RDS subnet-group changes can replace the DB instance**
    Do instead: inspect the change set and take a manual snapshot before any update where data exists.
 
 ## Shell & Command Reliability

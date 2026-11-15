@@ -44,12 +44,6 @@
       "Resource": "arn:aws:s3:::devops-iv-*"
     },
     {
-      "Sid": "S3ListBuckets",
-      "Effect": "Allow",
-      "Action": "s3:ListAllMyBuckets",
-      "Resource": "*"
-    },
-    {
       "Sid": "S3BucketConfiguration",
       "Effect": "Allow",
       "Action": [

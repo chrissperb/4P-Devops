@@ -224,9 +224,19 @@ EOF
 chmod 600 "$STATE_FILE"
 
 echo "==> Testando AssumeRole"
-aws sts assume-role --role-arn "$ROLE_ARN" --role-session-name bootstrap-check \
-  --external-id "$EXTERNAL_ID" \
-  --query 'AssumedRoleUser.Arn' --output text
+if [[ -n "${ACCESS_KEY_SECRET:-}" ]]; then
+  # O perfil admin nao pode assumir a role: o trust so permite o usuario do
+  # pipeline. Testa com a credencial recem-criada, sem imprimir o segredo.
+  env -u AWS_PROFILE -u AWS_DEFAULT_PROFILE -u AWS_SESSION_TOKEN -u AWS_SECURITY_TOKEN \
+    AWS_ACCESS_KEY_ID="$KEY_ID" \
+    AWS_SECRET_ACCESS_KEY="$ACCESS_KEY_SECRET" \
+    AWS_REGION="$AWS_REGION" \
+    aws sts assume-role --role-arn "$ROLE_ARN" --role-session-name bootstrap-check \
+      --external-id "$EXTERNAL_ID" \
+      --query 'AssumedRoleUser.Arn' --output text
+else
+  echo "    chave existente; segredo nao recuperavel, teste AssumeRole pulado"
+fi
 
 cat <<EOF
 
