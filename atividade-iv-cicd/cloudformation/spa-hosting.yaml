@@ -1,0 +1,231 @@
+# =============================================================================
+# spa-hosting.yaml — hospedagem da SPA (Atividade IV)
+#
+# Cria:
+#   1. Bucket S3 privado com os arquivos do build Vite;
+#   2. Origin Access Control (OAC) para o CloudFront ler o bucket sem torná-lo
+#      público;
+#   3. CloudFront Function que resolve diretórios ("/reflexao/" ->
+#      "/reflexao/index.html") e rotas sem extensão;
+#   4. Distribuição CloudFront com HTTPS, compressão e cabeçalhos de segurança.
+#
+# Não usa Lambda@Edge: o novo AWS experience não suporta Lambda@Edge.
+# CloudFront Functions é o mecanismo suportado para reescrita leve.
+# =============================================================================
+
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: |
+  Atividade IV - DevOps: SPA React/Vite hospedada em S3 privado e servida por
+  Amazon CloudFront com Origin Access Control, HTTPS e CloudFront Function.
+
+Parameters:
+
+  ProjectName:
+    Type: String
+    Default: devops-iv
+    MinLength: 3
+    MaxLength: 20
+    AllowedPattern: ^[a-z0-9-]+$
+    ConstraintDescription: Use apenas letras minusculas, numeros e hifen.
+    Description: Prefixo dos nomes dos recursos.
+
+  PriceClass:
+    Type: String
+    Default: PriceClass_100
+    AllowedValues:
+      - PriceClass_100
+      - PriceClass_200
+      - PriceClass_All
+    Description: Quanto mais ampla a classe, maior o custo de borda.
+
+# -----------------------------------------------------------------------------
+# RESOURCES
+# -----------------------------------------------------------------------------
+Resources:
+
+  # Bucket privado. Nenhum acesso público: o único leitor é o CloudFront, via
+  # bucket policy com a conta de origem (OAC).
+  SpaBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${ProjectName}-spa-${AWS::AccountId}-${AWS::Region}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              # SSE-S3: o CloudFront (OAC) consegue ler sem grant extra no KMS.
+              # O bucket de artifacts usa SSE-KMS (ninguem alem do pipeline le).
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: expire-noncurrent-versions
+            Status: Enabled
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 30
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # Permite apenas o CloudFront desta conta ler os objetos. A condição usa
+  # AWS:SourceArn com curinga de distribuição (evita dependência circular entre
+  # a distribuição e a bucket policy) e continua restrita à conta.
+  SpaBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SpaBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCloudFrontServicePrincipalReadOnly
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub 'arn:aws:s3:::${SpaBucket}/*'
+            Condition:
+              StringLike:
+                AWS:SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/*'
+
+  SpaOriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub '${ProjectName}-spa-oac'
+        Description: Leitura privada do bucket da SPA pelo CloudFront.
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  # Reescrita leve na borda. Regras:
+  #   "/"              -> "/index.html"
+  #   "/reflexao/"     -> "/reflexao/index.html"
+  #   "/reflexao"      -> "/reflexao/index.html"
+  #   "/assets/x.js"   -> inalterado (tem extensão)
+  SpaRewriteFunction:
+    Type: AWS::CloudFront::Function
+    Properties:
+      Name: !Sub '${ProjectName}-spa-rewrite'
+      AutoPublish: true
+      FunctionConfig:
+        Comment: Resolve index.html para diretorios e rotas da SPA.
+        Runtime: cloudfront-js-2.0
+      FunctionCode: |
+        function handler(event) {
+          var request = event.request;
+          var uri = request.uri;
+
+          if (uri.endsWith('/')) {
+            request.uri = uri + 'index.html';
+          } else if (!uri.includes('.')) {
+            request.uri = uri + '/index.html';
+          }
+
+          return request;
+        }
+
+  # HSTS, nosniff, frame-ancestors e referrer-policy.
+  SpaSecurityHeaders:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: !Sub '${ProjectName}-spa-security-headers'
+        Comment: Cabecalhos de seguranca da SPA.
+        SecurityHeadersConfig:
+          ContentTypeOptions:
+            Override: true
+          FrameOptions:
+            FrameOption: DENY
+            Override: true
+          ReferrerPolicy:
+            ReferrerPolicy: strict-origin-when-cross-origin
+            Override: true
+          StrictTransportSecurity:
+            AccessControlMaxAgeSec: 31536000
+            IncludeSubdomains: true
+            Preload: true
+            Override: true
+          XSSProtection:
+            ModeBlock: true
+            Protection: true
+            Override: true
+
+  SpaDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Comment: !Sub '${ProjectName} SPA'
+        Enabled: true
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        PriceClass: !Ref PriceClass
+        DefaultRootObject: index.html
+        Origins:
+          - Id: spa-s3-origin
+            DomainName: !GetAtt SpaBucket.RegionalDomainName
+            OriginAccessControlId: !Ref SpaOriginAccessControl
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+        DefaultCacheBehavior:
+          TargetOriginId: spa-s3-origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+          CachedMethods:
+            - GET
+            - HEAD
+          Compress: true
+          # CachingOptimized (gerenciada pela AWS).
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          ResponseHeadersPolicyId: !Ref SpaSecurityHeaders
+          FunctionAssociations:
+            - EventType: viewer-request
+              FunctionARN: !GetAtt SpaRewriteFunction.FunctionARN
+        # Fallback para rotas do cliente (o build é MPA, mas mantém o
+        # comportamento de SPA previsível).
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 0
+
+# -----------------------------------------------------------------------------
+# OUTPUTS
+# -----------------------------------------------------------------------------
+Outputs:
+
+  WebsiteUrl:
+    Description: URL publica da SPA (abra no navegador)
+    Value: !Sub 'https://${SpaDistribution.DomainName}'
+
+  DistributionDomainName:
+    Description: Dominio CloudFront
+    Value: !GetAtt SpaDistribution.DomainName
+
+  DistributionId:
+    Description: ID da distribuicao (usado na invalidacao do pipeline)
+    Value: !Ref SpaDistribution
+
+  BucketName:
+    Description: Bucket de origem da SPA (usado no s3 sync do pipeline)
+    Value: !Ref SpaBucket
+
+  RewriteFunctionArn:
+    Description: ARN da CloudFront Function de reescrita
+    Value: !GetAtt SpaRewriteFunction.FunctionARN

@@ -3,7 +3,9 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
-  base: '/4P-Devops/',
+  // CloudFront serve a SPA na raiz do domínio. O build do GitHub Pages
+  // antigo usava '/4P-Devops/'; aquele site continua publicado como estava.
+  base: '/',
   plugins: [react()],
   build: {
     outDir: 'dist',

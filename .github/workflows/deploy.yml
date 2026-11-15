@@ -1,44 +1,452 @@
-name: Deploy to GitHub Pages
+name: Deploy AWS (CloudFormation + SPA)
+
+# Pipeline da Atividade IV:
+#   PR  -> validate + plan (change sets, nada aplicado)
+#   main-> validate + apply (com aprovacao do environment production) + verify
+#   manual -> apply ou destroy, com opcao de pular a stack da Atividade III
+#
+# Autenticacao: access key de um usuario IAM restrito a sts:AssumeRole, que
+# assume uma role escopada. OIDC nao esta disponivel nesta conta (SCP nega
+# iam:*Provider*). Ver atividade-iv-cicd/README.md.
 
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
+    inputs:
+      action:
+        description: "apply (cria/atualiza) ou destroy (remove tudo)"
+        type: choice
+        options: [apply, destroy]
+        default: apply
+      skip_infra:
+        description: "Pular a stack da Atividade III (VPC/EC2/ALB/RDS)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
+  pull-requests: write
 
 concurrency:
-  group: pages
-  cancel-in-progress: true
+  group: aws-4p-devops-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-2
+  CFN_STACK_SPA: devops-iv-spa
+  CFN_STACK_INFRA: devops-iii-dev
+  SPA_TEMPLATE: atividade-iv-cicd/cloudformation/spa-hosting.yaml
+  INFRA_TEMPLATE: atividade-iii-cloudformation/template.yaml
+  SPA_PARAMS: atividade-iv-cicd/params/spa-dev.json
+  INFRA_PARAMS: atividade-iv-cicd/params/dev-atividade-iii.json
+  SCRIPTS_DIR: atividade-iv-cicd/scripts
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-      - name: Install dependencies
-        run: npm ci
-      - name: Build
-        run: npm run build
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: ./dist
 
-  deploy:
-    needs: build
+  # ---------------------------------------------------------------------------
+  # 1. Build e lint (sem AWS)
+  # ---------------------------------------------------------------------------
+  validate:
+    name: Validar build e templates
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    timeout-minutes: 15
     steps:
-      - name: Deploy
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node 20 com cache do npm
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Build da SPA (base /)
+        run: npm run build:ci
+
+      - name: cfn-lint
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet --user --break-system-packages cfn-lint
+          cfn-lint --version
+          cfn-lint --non-zero-exit-code error \
+            "$INFRA_TEMPLATE" "$SPA_TEMPLATE" | tee cfn-lint.txt
+
+      - name: actionlint
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:latest -color
+
+      - name: Guardar build
+        uses: actions/upload-artifact@v4
+        with:
+          name: spa-dist
+          path: dist
+          retention-days: 14
+
+      - name: Guardar relatorio de lint
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-reports
+          path: cfn-lint.txt
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # 2. Plan (pull request)
+  # ---------------------------------------------------------------------------
+  plan:
+    name: Plan (change sets)
+    needs: validate
+    if: >-
+      ${{ github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ARTIFACTS_BUCKET: ${{ secrets.ARTIFACTS_BUCKET }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Credenciais AWS (role temporaria)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-external-id: ${{ secrets.AWS_ROLE_EXTERNAL_ID }}
+          role-session-name: gha-plan-${{ github.run_id }}
+          role-skip-session-tagging: true
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Validar templates na AWS
+        run: |
+          set -euo pipefail
+          aws cloudformation validate-template \
+            --template-body "file://$INFRA_TEMPLATE" > /dev/null
+          aws cloudformation validate-template \
+            --template-body "file://$SPA_TEMPLATE" > /dev/null
+
+      - name: Criar change sets (nada e aplicado)
+        run: |
+          set -euo pipefail
+          chmod +x "$SCRIPTS_DIR"/*.sh
+
+          "$SCRIPTS_DIR/cfn-change-set.sh" \
+            --stack "$CFN_STACK_SPA" \
+            --template "$SPA_TEMPLATE" \
+            --parameters "$SPA_PARAMS" \
+            --plan-out plan-spa.json \
+            --status-file spa.status \
+            --description "Plano do PR #${PR_NUMBER}"
+
+          "$SCRIPTS_DIR/cfn-change-set.sh" \
+            --stack "$CFN_STACK_INFRA" \
+            --template "$INFRA_TEMPLATE" \
+            --parameters "$INFRA_PARAMS" \
+            --capabilities CAPABILITY_IAM \
+            --plan-out plan-infra.json \
+            --status-file infra.status \
+            --description "Plano do PR #${PR_NUMBER}"
+
+          if [[ -n "${ARTIFACTS_BUCKET:-}" ]]; then
+            aws s3 cp plan-spa.json \
+              "s3://${ARTIFACTS_BUCKET}/runs/${GITHUB_RUN_ID}/" --only-show-errors
+            aws s3 cp plan-infra.json \
+              "s3://${ARTIFACTS_BUCKET}/runs/${GITHUB_RUN_ID}/" --only-show-errors
+          else
+            echo "::warning::ARTIFACTS_BUCKET nao configurado; planos nao foram para o S3"
+          fi
+
+      - name: Guardar planos
+        uses: actions/upload-artifact@v4
+        with:
+          name: cfn-plan
+          path: |
+            plan-spa.json
+            plan-infra.json
+          retention-days: 14
+
+      - name: Comentar plano no PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const files = ['plan-spa.json', 'plan-infra.json'].filter(f => fs.existsSync(f));
+            let body = '## CloudFormation plan\n\n';
+            for (const file of files) {
+              const plan = JSON.parse(fs.readFileSync(file, 'utf8'));
+              const changes = plan.Changes || [];
+              const name = (plan.StackId || '').split('/')[1] || file;
+              body += `### ${name}\n\n`;
+              if (changes.length === 0) {
+                body += '_Sem mudancas._\n\n';
+                continue;
+              }
+              body += '| Acao | Recurso logico | Tipo | Substitui |\n';
+              body += '| --- | --- | --- | --- |\n';
+              for (const change of changes) {
+                const rc = change.ResourceChange || {};
+                body += `| ${rc.Action || '-'} | ${rc.LogicalResourceId || '-'} | `;
+                body += `${rc.ResourceType || '-'} | ${rc.Replacement || '-'} |\n`;
+              }
+              body += '\n';
+            }
+            body += `_Run: ${context.runId}_\n`;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            });
+
+  # ---------------------------------------------------------------------------
+  # 3. Apply (push na main ou manual) — exige aprovacao do environment
+  # ---------------------------------------------------------------------------
+  deploy:
+    name: Apply
+    needs: validate
+    if: >-
+      ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    environment:
+      name: production
+    env:
+      ARTIFACTS_BUCKET: ${{ secrets.ARTIFACTS_BUCKET }}
+      SKIP_INFRA: ${{ github.event.inputs.skip_infra || 'false' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Credenciais AWS (role temporaria)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-external-id: ${{ secrets.AWS_ROLE_EXTERNAL_ID }}
+          role-session-name: gha-deploy-${{ github.run_id }}
+          role-skip-session-tagging: true
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Baixar build da SPA
+        uses: actions/download-artifact@v4
+        with:
+          name: spa-dist
+          path: dist
+
+      - name: Aplicar stack da SPA
+        id: spa
+        run: |
+          set -euo pipefail
+          chmod +x "$SCRIPTS_DIR"/*.sh
+          "$SCRIPTS_DIR/cfn-change-set.sh" \
+            --stack "$CFN_STACK_SPA" \
+            --template "$SPA_TEMPLATE" \
+            --parameters "$SPA_PARAMS" \
+            --plan-out plan-spa.json \
+            --status-file spa.status \
+            --description "Deploy ${GITHUB_SHA::7}" \
+            --apply
+          echo "changed=$(cat spa.status)" >> "$GITHUB_OUTPUT"
+
+      - name: Publicar SPA no S3 e invalidar CloudFront
+        run: |
+          set -euo pipefail
+          BUCKET="$(aws cloudformation describe-stacks --stack-name "$CFN_STACK_SPA" \
+            --query "Stacks[0].Outputs[?OutputKey=='BucketName'].OutputValue" --output text)"
+          DISTRIBUTION_ID="$(aws cloudformation describe-stacks --stack-name "$CFN_STACK_SPA" \
+            --query "Stacks[0].Outputs[?OutputKey=='DistributionId'].OutputValue" --output text)"
+
+          # Assets com hash: cache longo e imutavel. Sem --delete: um HTML
+          # antigo em cache pode referenciar um asset da build anterior.
+          aws s3 sync dist/assets "s3://${BUCKET}/assets" \
+            --cache-control "public,max-age=31536000,immutable" \
+            --only-show-errors
+
+          # HTML e demais arquivos: cache curto.
+          aws s3 sync dist "s3://${BUCKET}" \
+            --delete \
+            --exclude "assets/*" \
+            --cache-control "public,max-age=300,must-revalidate" \
+            --only-show-errors
+
+          INVALIDATION_ID="$(aws cloudfront create-invalidation \
+            --distribution-id "$DISTRIBUTION_ID" \
+            --paths "/*" \
+            --query 'Invalidation.Id' --output text)"
+
+          aws cloudfront wait invalidation-completed \
+            --distribution-id "$DISTRIBUTION_ID" --id "$INVALIDATION_ID"
+          echo "Invalidacao $INVALIDATION_ID concluida"
+
+      - name: Aplicar stack da Atividade III
+        if: ${{ env.SKIP_INFRA != 'true' }}
+        run: |
+          set -euo pipefail
+          "$SCRIPTS_DIR/cfn-change-set.sh" \
+            --stack "$CFN_STACK_INFRA" \
+            --template "$INFRA_TEMPLATE" \
+            --parameters "$INFRA_PARAMS" \
+            --capabilities CAPABILITY_IAM \
+            --plan-out plan-infra.json \
+            --status-file infra.status \
+            --description "Deploy ${GITHUB_SHA::7}" \
+            --apply
+
+      - name: Guardar planos aplicados
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: cfn-apply
+          path: |
+            plan-spa.json
+            plan-infra.json
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Resumo do deploy
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## Deploy AWS"
+            echo ""
+            echo "- Commit: \`${GITHUB_SHA::7}\`"
+            echo "- Regiao: \`${AWS_REGION}\`"
+            for stack in "$CFN_STACK_SPA" "$CFN_STACK_INFRA"; do
+              if aws cloudformation describe-stacks --stack-name "$stack" >/dev/null 2>&1; then
+                status="$(aws cloudformation describe-stacks --stack-name "$stack" \
+                  --query 'Stacks[0].StackStatus' --output text)"
+                echo "- Stack \`$stack\`: $status"
+                aws cloudformation describe-stacks --stack-name "$stack" \
+                  --query 'Stacks[0].Outputs[].[OutputKey,OutputValue]' \
+                  --output text | sed 's/^/  - /'
+              else
+                echo "- Stack \`$stack\`: nao existe"
+              fi
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
+  # 4. Verificacao pos-deploy
+  # ---------------------------------------------------------------------------
+  verify:
+    name: Verificar SPA publica
+    needs: deploy
+    if: ${{ always() && needs.deploy.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Credenciais AWS (role temporaria)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-external-id: ${{ secrets.AWS_ROLE_EXTERNAL_ID }}
+          role-session-name: gha-verify-${{ github.run_id }}
+          role-skip-session-tagging: true
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Checar HTTP, paginas e assets
+        run: |
+          set -euo pipefail
+          URL="$(aws cloudformation describe-stacks --stack-name "$CFN_STACK_SPA" \
+            --query "Stacks[0].Outputs[?OutputKey=='WebsiteUrl'].OutputValue" --output text)"
+          URL="${URL%/}"
+          DOMAIN="${URL#https://}"
+
+          for path in / /reflexao/; do
+            code="$(curl -sS -o /dev/null -w '%{http_code}' "${URL}${path}")"
+            echo "${path} -> ${code}"
+            [[ "$code" == "200" ]]
+          done
+
+          asset="$(curl -fsS "${URL}/" | grep -oE '/assets/[^"]+\.(js|css)' | head -1)"
+          [[ -n "$asset" ]]
+          code="$(curl -sS -o /dev/null -w '%{http_code}' "${URL}${asset}")"
+          echo "${asset} -> ${code}"
+          [[ "$code" == "200" ]]
+
+          redirect="$(curl -sS -o /dev/null -w '%{http_code}' "http://${DOMAIN}/")"
+          echo "http -> ${redirect}"
+          [[ "$redirect" == "301" || "$redirect" == "302" ]]
+
+          {
+            echo "## SPA publica"
+            echo ""
+            echo "- URL: ${URL}/"
+            echo "- /reflexao/: 200"
+            echo "- asset: ${asset}"
+            echo "- redirect HTTP -> HTTPS: ${redirect}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
+  # 5. Destroy (manual)
+  # ---------------------------------------------------------------------------
+  destroy:
+    name: Destroy
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    environment:
+      name: production
+    env:
+      SKIP_INFRA: ${{ github.event.inputs.skip_infra || 'false' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Credenciais AWS (role temporaria)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-external-id: ${{ secrets.AWS_ROLE_EXTERNAL_ID }}
+          role-session-name: gha-destroy-${{ github.run_id }}
+          role-skip-session-tagging: true
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Apagar stacks
+        run: |
+          set -euo pipefail
+          chmod +x "$SCRIPTS_DIR"/*.sh
+
+          if aws cloudformation describe-stacks --stack-name "$CFN_STACK_SPA" >/dev/null 2>&1; then
+            BUCKET="$(aws cloudformation describe-stacks --stack-name "$CFN_STACK_SPA" \
+              --query "Stacks[0].Outputs[?OutputKey=='BucketName'].OutputValue" --output text)"
+            "$SCRIPTS_DIR/empty-bucket.sh" "$BUCKET"
+            aws cloudformation delete-stack --stack-name "$CFN_STACK_SPA"
+            aws cloudformation wait stack-delete-complete --stack-name "$CFN_STACK_SPA"
+            echo "Stack $CFN_STACK_SPA removida"
+          else
+            echo "Stack $CFN_STACK_SPA nao existe"
+          fi
+
+          if [[ "${SKIP_INFRA}" != "true" ]]; then
+            if aws cloudformation describe-stacks --stack-name "$CFN_STACK_INFRA" >/dev/null 2>&1; then
+              aws cloudformation delete-stack --stack-name "$CFN_STACK_INFRA"
+              aws cloudformation wait stack-delete-complete --stack-name "$CFN_STACK_INFRA"
+              echo "Stack $CFN_STACK_INFRA removida"
+            else
+              echo "Stack $CFN_STACK_INFRA nao existe"
+            fi
+          else
+            echo "Stack $CFN_STACK_INFRA mantida (skip_infra=true)"
+          fi
+
+          {
+            echo "## Destroy"
+            echo ""
+            echo "Stacks removidas em \`${AWS_REGION}\`."
+          } >> "$GITHUB_STEP_SUMMARY"

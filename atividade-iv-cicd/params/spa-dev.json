@@ -1,0 +1,10 @@
+[
+  {
+    "ParameterKey": "ProjectName",
+    "ParameterValue": "devops-iv"
+  },
+  {
+    "ParameterKey": "PriceClass",
+    "ParameterValue": "PriceClass_100"
+  }
+]

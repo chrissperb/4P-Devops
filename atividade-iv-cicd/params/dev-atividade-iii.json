@@ -1,0 +1,22 @@
+[
+  {
+    "ParameterKey": "ProjectName",
+    "ParameterValue": "devops-iii"
+  },
+  {
+    "ParameterKey": "Environment",
+    "ParameterValue": "dev"
+  },
+  {
+    "ParameterKey": "DBName",
+    "ParameterValue": "appdb"
+  },
+  {
+    "ParameterKey": "DBUsername",
+    "ParameterValue": "dbadmin"
+  },
+  {
+    "ParameterKey": "AllowedHttpCidr",
+    "ParameterValue": "0.0.0.0/0"
+  }
+]

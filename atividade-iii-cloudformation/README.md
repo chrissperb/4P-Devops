@@ -6,6 +6,8 @@
 
 **Entrega:** um único arquivo [`template.yaml`](template.yaml) que cria, em uma pilha do CloudFormation, uma VPC, uma instância EC2 com nginx, um Application Load Balancer e um banco Amazon RDS MySQL.
 
+> **Deploy automatizado (Atividade IV):** esta stack é aplicada pelo pipeline em [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml), com plano em pull requests e apply aprovado na `main`. Instruções em [`atividade-iv-cicd/README.md`](../atividade-iv-cicd/README.md).
+
 ---
 
 ## 1. O que este projeto cria
@@ -17,36 +19,40 @@ flowchart TB
     Internet(["Internet<br/>usuário"])
     subgraph VPC["VPC 10.0.0.0/16"]
         subgraph AZA["Zona de Disponibilidade A"]
-            ALB["Application Load Balancer<br/>porta 80 (público)"]
+            ALB["Application Load Balancer<br/>público · HTTP 80 e HTTPS 443 opcional"]
             EC2["EC2 Amazon Linux 2023<br/>nginx · t3.micro"]
+            RDS[("RDS MySQL<br/>sub-rede privada · db.t3.micro")]
         end
         subgraph AZB["Zona de Disponibilidade B"]
             ALB2["ALB (2ª AZ, exigência da AWS)"]
-            RDS[("RDS MySQL<br/>privado · db.t3.micro")]
+            RDS2[("RDS (2ª AZ do subnet group)")]
         end
         IGW["Internet Gateway"]
+        RTB["Route table privada<br/>sem rota para IGW"]
     end
 
-    Internet -->|HTTP 80| ALB
+    Internet -->|HTTP 80 / HTTPS 443| ALB
     ALB -->|HTTP 80<br/>só do SG do ALB| EC2
     EC2 -->|MySQL 3306<br/>só do SG da EC2| RDS
+    RDS --- RTB
     VPC --- IGW
 ```
 
-> O ALB aparece nas duas AZs porque a AWS exige no mínimo duas sub-redes em Zonas de Disponibilidade diferentes. A instância EC2 fica em uma delas; o RDS pode ser colocado em qualquer uma das duas.
+> O ALB aparece nas duas AZs porque a AWS exige no mínimo duas sub-redes em Zonas de Disponibilidade diferentes. A EC2 fica em uma sub-rede pública; o RDS fica em sub-redes privadas, também em duas AZs. Sem `CertificateArn` e `DomainName`, o ALB continua somente em HTTP:80.
 
 | Recurso | O que é | Configuração escolhida |
 | --- | --- | --- |
 | VPC | Rede isolada na AWS | `10.0.0.0/16`, DNS habilitado |
-| Sub-redes | Faixas menores dentro da VPC | 2 públicas (`10.0.0.0/24`, `10.0.1.0/24`), AZs distintas |
+| Sub-redes | Faixas menores dentro da VPC | 2 públicas (`10.0.0.0/24`, `10.0.1.0/24`) e 2 privadas (`10.0.2.0/24`, `10.0.3.0/24`), AZs distintas |
 | Internet Gateway | Porta de saída da VPC para a internet | 1, anexado à VPC |
+| Route table privada | Rotas das sub-redes do RDS | Apenas a rota local da VPC; sem `0.0.0.0/0` e sem NAT |
 | Security Groups | Firewalls por recurso | ALB → EC2 → RDS, encadeados por referência |
 | EC2 | Servidor virtual | Amazon Linux 2023, `t3.micro`, nginx instalado no primeiro boot |
-| ALB | Distribuidor de tráfego HTTP | internet-facing, listener 80, health check em `/health.html` |
-| RDS | Banco de dados gerenciado | MySQL, `db.t3.micro`, privado, senha no Secrets Manager |
+| ALB | Distribuidor de tráfego HTTP/HTTPS | internet-facing, listener 80; listener 443 e redirect quando certificado ACM + domínio são informados |
+| RDS | Banco de dados gerenciado | MySQL, `db.t3.micro`, em sub-redes privadas, `PubliclyAccessible: false`, senha no Secrets Manager |
 | IAM | Permissões | Role com `AmazonSSMManagedInstanceCore` para acesso via SSM |
 
-**Custo aproximado (região `us-east-1`, preços públicos):** EC2 `t3.micro` e RDS `db.t3.micro` cabem no Free Tier nos primeiros 12 meses; o **Application Load Balancer não tem Free Tier** e custa cerca de **US$ 16–20 por mês**. Apague a pilha ao terminar (seção 9).
+**Custo aproximado (região `us-east-2`, preços públicos):** EC2 `t3.micro` e RDS `db.t3.micro` cabem no Free Tier nos primeiros 12 meses; o **Application Load Balancer não tem Free Tier** e custa cerca de **US$ 16–20 por mês**. Sub-redes privadas e ACM não adicionam custo; domínio e hosted zone, se usados para HTTPS, são cobrados à parte. Apague a pilha ao terminar (seção 9).
 
 ---
 
@@ -57,14 +63,14 @@ Para executar você precisa de:
 1. **Conta AWS** ativa (a de estudante serve).
 2. **Permissão** para criar VPC, EC2, ELB, RDS, IAM e Secrets Manager. O usuário `AdministratorAccess` funciona; em conta de estudante geralmente já é o caso.
 3. **AWS CLI v2** (opcional — o caminho pelo console não precisa dela). Instalação: <https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html>.
-4. **Região escolhida.** Todos os exemplos usam `us-east-1` (Virgínia do Norte), a mais barata e com mais serviços. Para usar outra, troque o valor de `--region` e no canto superior direito do console.
+4. **Região escolhida.** Todos os exemplos usam `us-east-2` (Ohio), a região fixa deste projeto. Para usar outra, troque o valor de `--region` e no canto superior direito do console.
 5. **Um par de credenciais** (Access Key) se for usar a CLI:
 
 ```bash
 aws configure
 # AWS Access Key ID:     <sua chave>
 # AWS Secret Access Key: <seu segredo>
-# Default region name:   us-east-1
+# Default region name:   us-east-2
 # Default output format: json
 ```
 
@@ -74,7 +80,7 @@ aws configure
 
 ## 3. Caminho A — Deploy pelo console da AWS (recomendado para quem nunca usou IaC)
 
-1. Abra <https://console.aws.amazon.com/cloudformation> e confirme a região no canto superior direito (`N. Virginia / us-east-1`).
+1. Abra <https://console.aws.amazon.com/cloudformation> e confirme a região no canto superior direito (`Ohio / us-east-2`).
 2. Clique em **Create stack** → **With new resources (standard)**.
 3. Em **Prerequisite – Prepare template**, marque **Template is ready**.
 4. Em **Specify template**, escolha **Upload a template file**, clique em **Choose file** e selecione o `template.yaml` deste diretório. Clique em **Next**.
@@ -87,11 +93,13 @@ aws configure
    | `Environment` | `dev` | `dev` = barato; `prod` = Multi-AZ e proteção contra exclusão |
    | `DBName` | `appdb` | Nome do banco criado no MySQL |
    | `DBUsername` | `dbadmin` | Usuário master (a senha é gerada pela AWS) |
-   | `AllowedHttpCidr` | `0.0.0.0/0` | Quem pode acessar o site (restrinja ao seu IP em produção) |
+   | `AllowedHttpCidr` | `0.0.0.0/0` | Quem pode acessar o site nas portas 80 e 443 (restrinja ao seu IP em produção) |
+   | `CertificateArn` | vazio | ARN de certificado ACM em `us-east-2`; vazio mantém HTTP |
+   | `DomainName` | vazio | Domínio coberto pelo certificado e apontado para o ALB; vazio mantém HTTP |
 
 7. Clique em **Next** duas vezes. Em **Capabilities**, marque a caixa **"I acknowledge that AWS CloudFormation might create IAM resources with custom names"**. Sem isso a AWS recusa a criação (o template cria uma *role* IAM).
 8. Clique em **Submit**. A tela de eventos mostra o progresso. **O banco RDS leva de 8 a 15 minutos**; o total fica em torno de 12–20 minutos.
-9. Quando o status virar **CREATE_COMPLETE**, abra a aba **Outputs**. O valor de `WebsiteUrl` é o endereço para abrir no navegador.
+9. Quando o status virar **CREATE_COMPLETE**, abra a aba **Outputs**. O valor de `WebsiteUrl` é `http://...` no deploy padrão ou `https://...` quando `CertificateArn` e `DomainName` forem informados.
 
 ---
 
@@ -109,21 +117,21 @@ aws cloudformation create-stack \
   --template-body file://template.yaml \
   --parameters ParameterKey=Environment,ParameterValue=dev \
   --capabilities CAPABILITY_IAM \
-  --region us-east-1
+  --region us-east-2
 
 # 3) Acompanhe a criação (Ctrl+C sai do acompanhamento, não cancela a pilha).
 aws cloudformation describe-stack-events \
   --stack-name devops-iii-dev \
-  --region us-east-1 \
+  --region us-east-2 \
   --query 'StackEvents[0:15].[Timestamp,ResourceStatus,LogicalResourceId]' \
   --output table
 
 # 4) Espere terminar e veja as saídas (URL do site, endpoint do banco...).
 aws cloudformation wait stack-create-complete \
-  --stack-name devops-iii-dev --region us-east-1
+  --stack-name devops-iii-dev --region us-east-2
 
 aws cloudformation describe-stacks \
-  --stack-name devops-iii-dev --region us-east-1 \
+  --stack-name devops-iii-dev --region us-east-2 \
   --query 'Stacks[0].Outputs' --output table
 ```
 
@@ -146,14 +154,14 @@ Para mudar parâmetros, acrescente outros `ParameterKey=...`:
 
 ```bash
 # Copie o valor de WebsiteUrl da aba Outputs (ou deste comando):
-aws cloudformation describe-stacks --stack-name devops-iii-dev --region us-east-1 \
-  --query 'Stacks[0].Outputs[?OutputKey==`WebsiteUrl`].OutputValue' --output text
+URL=$(aws cloudformation describe-stacks --stack-name devops-iii-dev --region us-east-2 \
+  --query 'Stacks[0].Outputs[?OutputKey==`WebsiteUrl`].OutputValue' --output text)
 
-# Teste com curl (troque pela URL retornada):
-curl -i http://devops-iii-dev-1234567890.us-east-1.elb.amazonaws.com
+# Teste com curl usando a URL retornada (HTTP no deploy padrão, HTTPS com certificado):
+curl -i "$URL"
 ```
 
-Esperado: `HTTP/1.1 200 OK` e o HTML com o título "Infraestrutura provisionada com CloudFormation" e o nome da instância que respondeu.
+Esperado: `HTTP/1.1 200 OK` (ou `HTTP/2 200` com HTTPS) e o HTML com o título "Infraestrutura provisionada com CloudFormation" e o nome da instância que respondeu.
 
 No console: **EC2 → Load Balancers → Target groups → Targets** deve mostrar a instância como `healthy`. Se estiver `unhealthy`, veja a seção 10.
 
@@ -161,7 +169,7 @@ No console: **EC2 → Load Balancers → Target groups → Targets** deve mostra
 
 ```bash
 # O ID da instância está no Output "InstanceId".
-aws ssm start-session --target <INSTANCE_ID> --region us-east-1
+aws ssm start-session --target <INSTANCE_ID> --region us-east-2
 ```
 
 Dentro da sessão:
@@ -182,10 +190,10 @@ sudo dnf install -y mariadb105
 # Pega usuário e senha do Secrets Manager (o nome do segredo está no Output
 # "DatabaseSecretArn").
 SECRET_ARN=$(aws cloudformation describe-stacks --stack-name devops-iii-dev \
-  --region us-east-1 \
+  --region us-east-2 \
   --query 'Stacks[0].Outputs[?OutputKey==`DatabaseSecretArn`].OutputValue' --output text)
 
-aws secretsmanager get-secret-value --secret-id "$SECRET_ARN" --region us-east-1 \
+aws secretsmanager get-secret-value --secret-id "$SECRET_ARN" --region us-east-2 \
   --query SecretString --output text
 # Retorna algo como {"username":"dbadmin","password":"..."}
 
@@ -197,6 +205,28 @@ Esperado: o prompt do MySQL aparece. Rode `SHOW DATABASES;` e confirme que `appd
 
 De fora da VPC, a conexão **não** funciona — é o comportamento desejado (`PubliclyAccessible: false`).
 
+### 5.4 Ativar HTTPS quando houver domínio
+
+O deploy padrão não tem domínio e fica em HTTP:80. Para ativar HTTPS:
+
+1. Crie um certificado público no **ACM de `us-east-2`** para o domínio desejado e conclua a validação DNS.
+2. Crie/ajuste o registro DNS do domínio para apontar para o DNS do ALB (alias A/AAAA no Route 53 ou CNAME no provedor).
+3. Atualize a pilha informando os dois parâmetros:
+
+```bash
+aws cloudformation update-stack \
+  --stack-name devops-iii-dev \
+  --template-body file://template.yaml \
+  --parameters \
+      ParameterKey=Environment,ParameterValue=dev \
+      ParameterKey=CertificateArn,ParameterValue=arn:aws:acm:us-east-2:CONTA:certificate/ID \
+      ParameterKey=DomainName,ParameterValue=app.exemplo.com \
+  --capabilities CAPABILITY_IAM \
+  --region us-east-2
+```
+
+Com os dois preenchidos, o template cria o listener 443, libera 443 no Security Group e faz a porta 80 redirecionar com `HTTP_301` para `https://<DomainName>`. O output `WebsiteUrl` passa a ser `https://<DomainName>`. Se apenas um dos parâmetros for informado, HTTPS continua desligado. O template não cria certificado, hosted zone nem registro DNS.
+
 ---
 
 ## 6. Mapa do README para o template
@@ -205,33 +235,39 @@ Cada linha da tabela aponta o bloco do `template.yaml` (números de linha do arq
 
 | Bloco | Linha | O que faz |
 | --- | --- | --- |
-| `AWSTemplateFormatVersion` / `Description` | 22–35 | Identifica o template e descreve a pilha no console |
-| `Parameters` | 37–90 | Perguntas feitas no deploy (nome do projeto, ambiente, banco, faixa de IP liberada) |
-| `ProjectName` | 41 | Prefixo dos nomes, evita conflito entre pilhas |
-| `Environment` | 53 | `dev` ou `prod`; controla tamanho das máquinas e proteções |
-| `DBName` / `DBUsername` | 62–82 | Nome do banco e usuário master (senha não fica no arquivo) |
-| `AllowedHttpCidr` | 83 | Quem pode acessar o site pela internet |
-| `Mappings` → `EnvironmentSizing` | 96–110 | Tabela estática: `dev` usa `t3.micro`, `prod` usa `t3.small` |
-| `Conditions` → `IsProd` | 112–117 | Liga Multi-AZ, backup de 7 dias e proteção contra exclusão só em `prod` |
-| `VPC` | 133 | Cria a rede `10.0.0.0/16` com DNS habilitado |
-| `InternetGateway` + `Attachment` | 148–163 | Conecta a VPC à internet |
-| `PublicSubnet1` / `PublicSubnet2` | 166–190 | Duas sub-redes em AZs diferentes (exigência do ALB) |
-| `RouteTable` + `DefaultRoute` | 192–210 | Manda o tráfego externo para o Internet Gateway |
-| `*RouteTableAssociation` | 212–226 | Liga cada sub-rede à tabela de rotas |
-| `AlbSecurityGroup` | 232 | Libera a porta 80 para o mundo (ou para o CIDR informado) |
-| `InstanceSecurityGroup` | 256 | Libera a porta 80 **só** para o Security Group do ALB |
-| `DatabaseSecurityGroup` | 281 | Libera a 3306 **só** para o Security Group da EC2 |
-| `InstanceRole` / `InstanceProfile` | 304–332 | Permissão IAM que permite abrir terminal via SSM (sem SSH) |
-| `WebServer` → `Metadata` | 339–382 | Lista o que o `cfn-init` instala: nginx, `index.html`, `health.html` |
-| `WebServer` → `CreationPolicy` | 384–389 | Só considera a EC2 pronta após o sinal do `cfn-signal` |
-| `WebServer` → `ImageId` | 392 | AMI Amazon Linux 2023 mais recente, lida de um parâmetro público da AWS |
-| `WebServer` → `UserData` | 403–429 | Script do primeiro boot: instala `aws-cfn-bootstrap`, roda `cfn-init`, sinaliza |
-| `LoadBalancer` | 432 | Cria o ALB público nas duas sub-redes |
-| `TargetGroup` | 452 | Define destino (a EC2), porta 80 e health check em `/health.html` |
-| `HttpListener` | 484 | Recebe na porta 80 e encaminha para o target group |
-| `DatabaseSubnetGroup` | 500 | Diz em quais sub-redes o RDS pode ficar |
-| `Database` | 512 | Cria o MySQL privado, com senha gerenciada pelo Secrets Manager |
-| `Outputs` | 559–594 | Valores exibidos no fim: URL, ID da EC2, endpoint do banco, ARN do segredo |
+| `AWSTemplateFormatVersion` / `Description` | 26–31 | Identifica o template e descreve a pilha no console |
+| `Parameters` | 39–106 | Perguntas feitas no deploy (nome do projeto, ambiente, banco, CIDR, certificado e domínio) |
+| `ProjectName` | 43 | Prefixo dos nomes, evita conflito entre pilhas |
+| `Environment` | 55 | `dev` ou `prod`; controla tamanho das máquinas e proteções |
+| `DBName` / `DBUsername` | 64–81 | Nome do banco e usuário master (senha não fica no arquivo) |
+| `AllowedHttpCidr` | 86 | Quem pode acessar o site nas portas 80 e 443 |
+| `CertificateArn` / `DomainName` | 95–106 | Certificado ACM e domínio para ligar HTTPS; vazios mantêm HTTP |
+| `Mappings` → `EnvironmentSizing` | 118–124 | Tabela estática: `dev` usa `t3.micro`, `prod` usa `t3.small` |
+| `Conditions` → `IsProd` | 135–137 | Liga Multi-AZ, backup de 7 dias e proteção contra exclusão só em `prod` |
+| `Conditions` → `HasHttps` | 143–151 | Liga listener 443, redirect e regra de SG só com certificado + domínio |
+| `VPC` | 168 | Cria a rede `10.0.0.0/16` com DNS habilitado |
+| `InternetGateway` + `Attachment` | 183–196 | Conecta a VPC à internet |
+| `PublicSubnet1` / `PublicSubnet2` | 201–228 | Duas sub-redes públicas em AZs diferentes (exigência do ALB) |
+| `PrivateSubnet1` / `PrivateSubnet2` | 233–260 | Duas sub-redes privadas em AZs diferentes, sem IP público |
+| `RouteTable` + `DefaultRoute` | 263–280 | Manda o tráfego externo para o Internet Gateway |
+| `*PublicSubnet*RouteTableAssociation` | 283–294 | Liga cada sub-rede pública à tabela de rotas pública |
+| `PrivateRouteTable` + associações | 300–320 | Tabela privada só com rota local; sem `0.0.0.0/0` e sem NAT |
+| `AlbSecurityGroup` | 330 | Libera a porta 80 para o mundo (ou para o CIDR informado) |
+| `AlbHttpsIngress` | 354 | Libera a 443 quando `HasHttps` é verdadeiro |
+| `InstanceSecurityGroup` | 368 | Libera a porta 80 **só** para o Security Group do ALB |
+| `DatabaseSecurityGroup` | 392 | Libera a 3306 **só** para o Security Group da EC2 |
+| `InstanceRole` / `InstanceProfile` | 415–451 | Permissão IAM que permite abrir terminal via SSM (sem SSH) |
+| `WebServer` → `Metadata` | 462–503 | Lista o que o `cfn-init` instala: nginx, `index.html`, `health.html` |
+| `WebServer` → `CreationPolicy` | 507–510 | Só considera a EC2 pronta após o sinal do `cfn-signal` |
+| `WebServer` → `ImageId` | 515 | AMI Amazon Linux 2023 mais recente, lida de um parâmetro público da AWS |
+| `WebServer` → `UserData` | 529–548 | Script do primeiro boot: instala `aws-cfn-bootstrap`, roda `cfn-init`, sinaliza |
+| `LoadBalancer` | 558 | Cria o ALB público nas duas sub-redes públicas |
+| `TargetGroup` | 578 | Define destino (a EC2), porta 80 e health check em `/health.html` |
+| `HttpListener` | 613 | Recebe na 80; com HTTPS ativo, redireciona para 443; sem HTTPS, encaminha |
+| `HttpsListener` | 633 | Listener 443 opcional, com certificado ACM, sob `HasHttps` |
+| `DatabaseSubnetGroupPrivate` | 653 | Diz que o RDS pode ficar apenas nas sub-redes privadas |
+| `Database` | 665 | Cria o MySQL privado, com senha gerenciada pelo Secrets Manager |
+| `Outputs` | 724–763 | Valores exibidos no fim: URL, ID da EC2, endpoint do banco, ARN do segredo |
 
 ### Como as dependências são garantidas
 
@@ -267,16 +303,18 @@ O template usa a **AMI oficial Amazon Linux 2023** e instala o nginx com `cfn-in
 
 `{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}` resolve, em tempo de deploy, o ID da AMI mais recente da Amazon Linux 2023 **na região em uso**. Um ID fixo (`ami-0abc...`) só existe em uma região e envelhece (a AWS despublica AMIs antigas), fazendo o template falhar meses depois.
 
-### 7.4 Por que duas sub-redes em Zonas de Disponibilidade diferentes
+### 7.4 Por que duas sub-redes públicas e duas privadas
 
-O Application Load Balancer **exige** no mínimo duas sub-redes em AZs distintas; com uma só, o deploy falha com erro de validação. Além de obrigatório, é o que permite ao ALB continuar atendendo se uma AZ ficar indisponível.
+O Application Load Balancer **exige** no mínimo duas sub-redes públicas em AZs distintas; com uma só, o deploy falha com erro de validação. Além de obrigatório, é o que permite ao ALB continuar atendendo se uma AZ ficar indisponível.
+
+O RDS também exige um DB subnet group com pelo menos duas sub-redes em AZs distintas, mesmo em single-AZ. Essas sub-redes são **privadas**: a route table não tem rota `0.0.0.0/0`, então o banco não tem caminho para o Internet Gateway. A EC2 continua na sub-rede pública para instalar pacotes e falar com o SSM; o RDS não precisa de NAT.
 
 ### 7.5 Por que os Security Groups se referenciam em vez de usar faixas de IP
 
 O grupo da EC2 aceita tráfego **apenas** do grupo do ALB, e o grupo do RDS **apenas** do grupo da EC2 (`SourceSecurityGroupId`). Vantagens:
 
 - A EC2 não fica exposta diretamente na internet.
-- O banco não é alcançável de fora da VPC (`PubliclyAccessible: false`).
+- O banco não é alcançável de fora da VPC: fica em sub-redes privadas e tem `PubliclyAccessible: false`.
 - Se o ALB for recriado com outro IP, nada precisa ser reconfigurado: a referência é ao grupo, não ao endereço.
 
 ### 7.6 Por que a senha do banco não está no template
@@ -287,11 +325,11 @@ O grupo da EC2 aceita tráfego **apenas** do grupo do ALB, e o grupo do RDS **ap
 
 Abrir a porta 22 e distribuir pares de chaves é uma superfície de ataque desnecessária. Com a *role* `AmazonSSMManagedInstanceCore`, o acesso ao terminal passa pelo serviço SSM, autenticado pelo IAM e auditável no CloudTrail, sem nenhuma porta de administração exposta. Custo: uma *role* e um *instance profile* no template.
 
-### 7.8 Por que não há NAT Gateway, Auto Scaling nem HTTPS
+### 7.8 Por que não há NAT Gateway, Auto Scaling nem HTTPS por padrão
 
-- **NAT Gateway** custaria ~US$ 32/mês e não é necessário: a instância fica em sub-rede pública.
+- **NAT Gateway** custaria ~US$ 32/mês e não é necessário: a EC2 fica em sub-rede pública e o RDS não inicia tráfego para a internet.
 - **Auto Scaling** não é pedido na atividade e adicionaria um Launch Template e um grupo — mais peças para o mesmo resultado demonstrável.
-- **HTTPS** exigiria um certificado no ACM e um domínio validado; fica como evolução (basta adicionar um listener 443 e um `AWS::CertificateManager::Certificate`).
+- **HTTPS** exige certificado ACM em `us-east-2` e domínio válido; ACM não emite certificado para o DNS do ALB. Como a conta não tem domínio, o template deixa o listener 443 condicional: ele só é criado quando `CertificateArn` e `DomainName` são informados. Sem isso, o deploy permanece em HTTP:80. Para ativar, crie/valide o certificado no ACM, aponte o DNS para o ALB e atualize a pilha com os dois parâmetros. O template **não** cria certificado, hosted zone ou registro DNS.
 
 ---
 
@@ -322,11 +360,11 @@ Nenhuma biblioteca, template de terceiros ou código copiado foi usado: o `templ
 ### Pela CLI
 
 ```bash
-aws cloudformation delete-stack --stack-name devops-iii-dev --region us-east-1
+aws cloudformation delete-stack --stack-name devops-iii-dev --region us-east-2
 
 # Acompanhe até sumir:
 aws cloudformation wait stack-delete-complete \
-  --stack-name devops-iii-dev --region us-east-1
+  --stack-name devops-iii-dev --region us-east-2
 ```
 
 ### Depois de apagar, confira
