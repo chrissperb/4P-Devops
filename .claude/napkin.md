@@ -28,7 +28,10 @@
 7. **[2026-11-15] S3 IAM action names differ from the API operation names**
    Do instead: use `s3:PutEncryptionConfiguration` (not `PutBucketEncryption`) and `s3:PutLifecycleConfiguration` (not `PutBucketLifecycleConfiguration`).
 
-8. **[2026-11-15] RDS subnet-group changes can replace the DB instance**
+8. **[2026-11-15] CloudFormation VPC/subnet attributes need EC2 modify actions**
+   Do instead: keep `ec2:ModifyVpcAttribute` and `ec2:ModifySubnetAttribute` in the deploy role; `EnableDns*` and `MapPublicIpOnLaunch` call them.
+
+9. **[2026-11-15] RDS subnet-group changes can replace the DB instance**
    Do instead: inspect the change set and take a manual snapshot before any update where data exists.
 
 ## Shell & Command Reliability
