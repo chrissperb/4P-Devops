@@ -1,4 +1,13 @@
 /** @type {import('tailwindcss').Config} */
+
+// Tokens semânticos vivem em `src/index.css` como canais RGB (`--c-<token>`),
+// o que permite os modificadores de alpha do Tailwind (`bg-canvas/80`).
+const token = (name) => `rgb(var(--c-${name}) / <alpha-value>)`;
+
+// Tokens cujo alpha já faz parte do papel (glass, textos secundários, hairlines
+// e fills) não aceitam modificador de alpha; o valor final vem do CSS.
+const literal = (name) => `var(--c-${name})`;
+
 export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
   theme: {
@@ -8,9 +17,37 @@ export default {
         sans: ['Inter', 'system-ui', 'sans-serif'],
       },
       colors: {
+        // Legado mapeado por papel na T3 (`ink` -> band/glass, `cream` -> text).
         ink: { DEFAULT: '#0b0b16', soft: '#15152a', mute: '#1e1e38' },
         cream: '#f5f5fb',
-        surface: { DEFAULT: '#12121f', raised: '#1b1b30', sunken: '#0d0d1a' },
+        canvas: token('canvas'),
+        surface: {
+          DEFAULT: token('surface'),
+          raised: token('surface-raised'),
+          sunken: token('surface-sunken'),
+        },
+        band: token('band'),
+        glass: literal('glass'),
+        text: {
+          DEFAULT: token('text'),
+          muted: literal('text-muted'),
+          subtle: literal('text-subtle'),
+        },
+        hairline: literal('hairline'),
+        'border-strong': literal('border-strong'),
+        fill: { subtle: literal('fill-subtle'), strong: literal('fill-strong') },
+        'on-contrast': token('on-contrast'),
+        focus: token('focus'),
+        'coral-deep': token('coral-deep'),
+        fig: {
+          surface: token('fig-surface'),
+          text: token('fig-text'),
+          'text-muted': token('fig-text-muted'),
+          line: literal('fig-line'),
+          'node-face': token('fig-node-face'),
+          'danger-soft': token('fig-danger-soft'),
+          'danger-text': token('fig-danger-text'),
+        },
         flow: { DEFAULT: '#3b5bff', soft: '#1c2350', deep: '#1e33b8', bright: '#93a8ff' },
         feedback: { DEFAULT: '#f0880a', soft: '#3a2a0f', deep: '#b3600a', bright: '#f6b755' },
         learning: { DEFAULT: '#0d9488', soft: '#0e332f', deep: '#0a6b62', bright: '#4fd6c4' },
