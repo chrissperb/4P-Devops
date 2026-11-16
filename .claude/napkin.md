@@ -34,7 +34,10 @@
 9. **[2026-11-15] CloudFormation no-changes can surface as a failed waiter**
    Do instead: inspect the change set reason for `didn't contain changes` and treat it as `unchanged`, not as a pipeline failure.
 
-10. **[2026-11-15] RDS subnet-group changes can replace the DB instance**
+10. **[2026-11-15] ELB needs `ec2:GetSecurityGroupsForVpc`**
+   Do instead: keep this action in the deploy role; `Describe*` does not cover it.
+
+11. **[2026-11-15] RDS subnet-group changes can replace the DB instance**
    Do instead: inspect the change set and take a manual snapshot before any update where data exists.
 
 ## Shell & Command Reliability

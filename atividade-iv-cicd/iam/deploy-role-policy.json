@@ -10,16 +10,10 @@
         "cloudformation:DeleteStack",
         "cloudformation:DescribeStacks",
         "cloudformation:DescribeStackEvents",
-        "cloudformation:DescribeStackResource",
-        "cloudformation:DescribeStackResources",
-        "cloudformation:GetTemplate",
-        "cloudformation:ListStackResources",
         "cloudformation:CreateChangeSet",
         "cloudformation:DescribeChangeSet",
         "cloudformation:DeleteChangeSet",
-        "cloudformation:ExecuteChangeSet",
-        "cloudformation:ListChangeSets",
-        "cloudformation:UpdateTerminationProtection"
+        "cloudformation:ExecuteChangeSet"
       ],
       "Resource": [
         "arn:aws:cloudformation:${AWS_REGION}:${ACCOUNT_ID}:stack/devops-iii-*/*",
@@ -163,7 +157,8 @@
         "ec2:DeleteTags",
         "ec2:ModifyInstanceAttribute",
         "ec2:ModifyVpcAttribute",
-        "ec2:ModifySubnetAttribute"
+        "ec2:ModifySubnetAttribute",
+        "ec2:GetSecurityGroupsForVpc"
       ],
       "Resource": "*"
     },
