@@ -10,3 +10,13 @@ yarn-error.log*
 
 # Estado local do bootstrap AWS (contém ExternalId; nunca comitar)
 atividade-iv-cicd/.bootstrap.env
+
+# Artefatos de agentes/revisões — somente escopo local, nunca commitar
+.crew/
+.claude/
+CORRECTION_PLAN.md
+TECH_DEBT_AUDIT.md
+UX_REVIEW.md
+VERIFICATION_CHECKLIST.md
+PROJECT.md
+docs/specs/
