@@ -32,6 +32,14 @@ cleanup_review_stack() {
   aws cloudformation wait stack-delete-complete --stack-name "$STACK"
 }
 
+mark_unchanged() {
+  echo "==> Sem mudancas em $STACK"
+  echo "unchanged" > "$STATUS_FILE"
+  if [[ -n "$PLAN_OUT" ]]; then
+    printf '{"StackName":"%s","Status":"NO_CHANGES","Changes":[]}\n' "$STACK" > "$PLAN_OUT"
+  fi
+}
+
 STACK=""
 TEMPLATE=""
 PARAMETERS=""
@@ -105,11 +113,7 @@ set -e
 
 if [[ $CREATE_RC -ne 0 ]]; then
   if grep -qi "didn't contain changes\|No updates are to be performed" <<<"$CREATE_OUTPUT"; then
-    echo "==> Sem mudancas em $STACK"
-    echo "unchanged" > "$STATUS_FILE"
-    if [[ -n "$PLAN_OUT" ]]; then
-      printf '{"StackName":"%s","Status":"NO_CHANGES","Changes":[]}\n' "$STACK" > "$PLAN_OUT"
-    fi
+    mark_unchanged
     exit 0
   fi
   echo "$CREATE_OUTPUT" >&2
@@ -118,10 +122,18 @@ fi
 
 if ! aws cloudformation wait change-set-create-complete \
       --stack-name "$STACK" --change-set-name "$CHANGE_SET"; then
-  echo "Falha ao montar o change set de $STACK:" >&2
-  aws cloudformation describe-change-set --stack-name "$STACK" \
+  CHANGE_SET_STATE="$(aws cloudformation describe-change-set --stack-name "$STACK" \
     --change-set-name "$CHANGE_SET" \
-    --query '[Status,StatusReason]' --output text >&2 || true
+    --query '[Status,StatusReason]' --output text 2>&1 || true)"
+  if grep -qi "didn't contain changes\|No updates are to be performed" <<<"$CHANGE_SET_STATE"; then
+    aws cloudformation delete-change-set --stack-name "$STACK" \
+      --change-set-name "$CHANGE_SET" >/dev/null 2>&1 || true
+    [[ "$MODE" == "CREATE" ]] && cleanup_review_stack || true
+    mark_unchanged
+    exit 0
+  fi
+  echo "Falha ao montar o change set de $STACK:" >&2
+  echo "$CHANGE_SET_STATE" >&2
   [[ "$MODE" == "CREATE" ]] && cleanup_review_stack || true
   exit 1
 fi
