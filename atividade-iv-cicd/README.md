@@ -342,6 +342,7 @@ A conta tem US$ 140 em créditos. Configure um spend limit em **AWS Settings →
 | CloudFront 403 após deploy | Objeto ausente ou OAC | Confira o `s3 sync`, o `BucketName` e a invalidação |
 | `AccessDenied` no apply | Permissão faltando na role | Ajuste `iam/deploy-role-policy.json` e rode o bootstrap |
 | `ec2:ModifyVpcAttribute` negado | VPC com `EnableDnsSupport`/`EnableDnsHostnames` | Adicione `ec2:ModifyVpcAttribute` e `ec2:ModifySubnetAttribute` à policy e rode o bootstrap |
+| `ec2:GetSecurityGroupsForVpc` negado | ALB valida os Security Groups da VPC | Adicione `ec2:GetSecurityGroupsForVpc` à policy e rode o bootstrap |
 | `s3:PutEncryptionConfiguration` negado | Nome de API usado no IAM | Use as ações IAM `s3:GetEncryptionConfiguration`/`s3:PutEncryptionConfiguration` e `s3:GetLifecycleConfiguration`/`s3:PutLifecycleConfiguration` |
 | `InvalidClientTokenId` / chave expirada | Access key rotacionada/removida | Gere nova com `rotate-key.sh` e atualize os secrets |
 | Job `plan` sem secrets em PR | PR de fork | Rode o plano em branch do próprio repositório |
