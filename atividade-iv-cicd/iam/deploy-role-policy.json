@@ -264,6 +264,14 @@
         "secretsmanager:UntagResource"
       ],
       "Resource": "*"
+    },
+    {
+      "Sid": "KMSForRDSSecretsManager",
+      "Effect": "Allow",
+      "Action": [
+        "kms:DescribeKey"
+      ],
+      "Resource": "arn:aws:kms:${AWS_REGION}:${ACCOUNT_ID}:key/*"
     }
   ]
 }
