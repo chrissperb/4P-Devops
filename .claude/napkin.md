@@ -31,7 +31,10 @@
 8. **[2026-11-15] CloudFormation VPC/subnet attributes need EC2 modify actions**
    Do instead: keep `ec2:ModifyVpcAttribute` and `ec2:ModifySubnetAttribute` in the deploy role; `EnableDns*` and `MapPublicIpOnLaunch` call them.
 
-9. **[2026-11-15] RDS subnet-group changes can replace the DB instance**
+9. **[2026-11-15] CloudFormation no-changes can surface as a failed waiter**
+   Do instead: inspect the change set reason for `didn't contain changes` and treat it as `unchanged`, not as a pipeline failure.
+
+10. **[2026-11-15] RDS subnet-group changes can replace the DB instance**
    Do instead: inspect the change set and take a manual snapshot before any update where data exists.
 
 ## Shell & Command Reliability

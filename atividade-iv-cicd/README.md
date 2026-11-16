@@ -336,6 +336,7 @@ A conta tem US$ 140 em créditos. Configure um spend limit em **AWS Settings →
 | `explicit deny ... service control policy` em região | SCP RegionFloor | Use `us-east-2`; o workflow já fixa |
 | `iam:CreateOpenIDConnectProvider` negado | SCP `iam:*Provider*` | Use access keys (caminho adotado) |
 | `didn't contain changes` | Nada mudou | Tratado como sucesso (`unchanged`) |
+| `Waiter ChangeSetCreateComplete failed ... didn't contain changes` | Stack sem mudanças | O script trata como `unchanged`, remove o change set e segue para a próxima stack |
 | Stack em `ROLLBACK_COMPLETE` | Criação anterior falhou | `action=destroy` e reaplique |
 | Stack em `REVIEW_IN_PROGRESS` | Plano anterior deixou stack vazia | O script remove no próximo `plan`/`apply`; se necessário, apague a stack vazia |
 | CloudFront 403 após deploy | Objeto ausente ou OAC | Confira o `s3 sync`, o `BucketName` e a invalidação |
