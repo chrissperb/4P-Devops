@@ -37,7 +37,10 @@
 10. **[2026-11-15] ELB needs `ec2:GetSecurityGroupsForVpc`**
    Do instead: keep this action in the deploy role; `Describe*` does not cover it.
 
-11. **[2026-11-15] RDS subnet-group changes can replace the DB instance**
+11. **[2026-11-16] RDS managed master password needs KMS DescribeKey**
+   Do instead: allow `kms:DescribeKey` on the account's KMS keys; RDS describes `aws/secretsmanager` when `ManageMasterUserPassword` is true.
+
+12. **[2026-11-15] RDS subnet-group changes can replace the DB instance**
    Do instead: inspect the change set and take a manual snapshot before any update where data exists.
 
 ## Shell & Command Reliability
