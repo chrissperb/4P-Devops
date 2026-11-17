@@ -27,7 +27,7 @@ export default {
           sunken: token('surface-sunken'),
         },
         band: token('band'),
-        glass: literal('glass'),
+        glass: { DEFAULT: literal('glass'), strong: literal('glass-strong') },
         text: {
           DEFAULT: token('text'),
           muted: literal('text-muted'),
@@ -48,12 +48,35 @@ export default {
           'danger-soft': token('fig-danger-soft'),
           'danger-text': token('fig-danger-text'),
         },
-        flow: { DEFAULT: '#3b5bff', soft: '#1c2350', deep: '#1e33b8', bright: '#93a8ff' },
-        feedback: { DEFAULT: '#f0880a', soft: '#3a2a0f', deep: '#b3600a', bright: '#f6b755' },
-        learning: { DEFAULT: '#0d9488', soft: '#0e332f', deep: '#0a6b62', bright: '#4fd6c4' },
-        violet: { DEFAULT: '#6d4aff', soft: '#241b4a', deep: '#4a2fd6', bright: '#b3a0ff' },
+        flow: {
+          DEFAULT: '#3b5bff',
+          soft: token('flow-soft'),
+          deep: token('flow-deep'),
+          bright: token('flow-bright'),
+        },
+        feedback: {
+          DEFAULT: '#f0880a',
+          soft: token('feedback-soft'),
+          deep: token('feedback-deep'),
+          bright: token('feedback-bright'),
+        },
+        learning: {
+          DEFAULT: '#0d9488',
+          soft: token('learning-soft'),
+          deep: token('learning-deep'),
+          bright: token('learning-bright'),
+        },
+        violet: {
+          DEFAULT: '#6d4aff',
+          soft: token('violet-soft'),
+          deep: token('violet-deep'),
+          bright: token('violet-bright'),
+        },
         coral: '#ff6b8a'
       },
+      // Utilitário exato `border-control` (uma cor chamada `border-control`
+      // geraria `border-border-control`), por isso entra em `borderColor`.
+      borderColor: { control: literal('border-control') },
       boxShadow: {
         card: '0 1px 2px rgba(20,20,43,0.04), 0 12px 32px -14px rgba(20,20,43,0.20)',
         lift: '0 10px 44px -14px rgba(20,20,43,0.30)',

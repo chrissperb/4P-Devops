@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { hero, threeWays } from '../data/content';
 import { getAccent } from '../lib/accents';
 import DevOpsLoop from './DevOpsLoop';
+import ThemeToggle from './ThemeToggle';
 import { IconFlow, IconFeedback, IconLearning, IconArrowRight, IconSpark } from './icons';
 
 const wayIcon = { fluxo: IconFlow, feedback: IconFeedback, aprendizado: IconLearning };
@@ -12,7 +13,7 @@ function KickerRow() {
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <span className="eyebrow flex items-center gap-2 text-cream/60">
+        <span className="eyebrow flex items-center gap-2 text-text-subtle">
           <IconSpark className="h-3.5 w-3.5 text-violet" />
           {hero.kicker}
         </span>
@@ -20,7 +21,7 @@ function KickerRow() {
           {hero.pills.map((pill) => {
             const accent = getAccent(pill.key);
             return (
-              <span key={pill.key} className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-cream/60">
+              <span key={pill.key} className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-text-subtle">
                 <span className={`h-2.5 w-2.5 rounded-full ${accent.bg}`} />
                 {pill.label}
               </span>
@@ -29,16 +30,19 @@ function KickerRow() {
         </span>
       </div>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-xs font-medium text-cream/55">
-          Por <span className="font-semibold text-cream/85">{hero.author}</span>
+        <p className="text-xs font-medium text-text-subtle">
+          Por <span className="font-semibold text-text">{hero.author}</span>
         </p>
-        <a
-          href={reflexaoHref}
-          className="group inline-flex items-center gap-2 rounded-full border border-violet/45 bg-violet/15 px-4 py-2 text-xs font-bold uppercase tracking-wider text-cream/90 transition hover:border-violet hover:bg-violet/25"
-        >
-          Reflexão
-          <IconArrowRight className="h-3.5 w-3.5 text-violet transition group-hover:translate-x-0.5" />
-        </a>
+        <div className="flex items-center gap-2">
+          <a
+            href={reflexaoHref}
+            className="group inline-flex items-center gap-2 rounded-full border border-violet/45 bg-violet/15 px-4 py-2 text-xs font-bold uppercase tracking-wider text-text transition hover:border-violet hover:bg-violet/25"
+          >
+            Reflexão
+            <IconArrowRight className="h-3.5 w-3.5 text-violet transition group-hover:translate-x-0.5" />
+          </a>
+          <ThemeToggle className="-my-1" />
+        </div>
       </div>
     </div>
   );
@@ -46,10 +50,10 @@ function KickerRow() {
 
 function TitleCard() {
   return (
-    <div className="rounded-3xl border border-white/10 bg-ink/75 p-6 shadow-lift backdrop-blur-md md:p-7">
+    <div className="rounded-3xl border border-hairline bg-glass p-6 shadow-lift backdrop-blur-md md:p-7">
       <h1 className="font-display text-3xl font-bold leading-[1.03] tracking-tight sm:text-4xl lg:text-[2.6rem]">
         {hero.titleLead}{' '}
-        <span className="relative inline-block text-cream">
+        <span className="relative inline-block text-text">
           {hero.titleAccent}
           <motion.span
             initial={{ scaleX: 0 }}
@@ -58,16 +62,16 @@ function TitleCard() {
             className="absolute -bottom-0.5 left-0 -z-10 h-3 w-full origin-left rounded-full bg-violet/60"
           />
         </span>{' '}
-        <span className="text-cream/55">{hero.titleTail}</span>
+        <span className="text-text-subtle">{hero.titleTail}</span>
       </h1>
-      <p className="mt-5 text-base leading-relaxed text-cream/70">{hero.subtitle}</p>
-      <dl className="mt-6 flex flex-wrap gap-x-8 gap-y-3 border-t border-white/10 pt-5">
+      <p className="mt-5 text-base leading-relaxed text-text-muted">{hero.subtitle}</p>
+      <dl className="mt-6 flex flex-wrap gap-x-8 gap-y-3 border-t border-hairline pt-5">
         {hero.stats.map((stat) => (
           <div key={stat.label} className="flex items-baseline gap-2">
             <dt className="sr-only">{stat.label}</dt>
             <dd>
               <span className="font-display text-2xl font-bold tracking-tight md:text-3xl">{stat.value}</span>
-              <span className="ml-2 text-xs font-medium text-cream/50">{stat.label}</span>
+              <span className="ml-2 text-xs font-medium text-text-subtle">{stat.label}</span>
             </dd>
           </div>
         ))}
@@ -85,26 +89,26 @@ function WayCard({ way, delay = 0 }) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay, ease: [0.22, 1, 0.36, 1] }}
-      className="group relative block rounded-3xl border border-white/10 bg-ink/75 p-5 backdrop-blur-md transition hover:border-white/25 hover:bg-ink/85"
+      className="group relative block rounded-3xl border border-hairline bg-glass p-5 backdrop-blur-md transition hover:border-border-strong hover:bg-glass-strong"
     >
       <div className="flex items-center gap-3">
-        <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/10 ${accent.text}`}>
+        <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-fill-strong ${accent.text}`}>
           <Icon className="h-5 w-5" />
         </span>
         <div className="min-w-0">
-          <span className="num-display block text-xs text-cream/45">{way.number}</span>
+          <span className="num-display block text-xs text-text-subtle">{way.number}</span>
           <h3 className="font-display text-lg font-bold leading-tight">{way.name}</h3>
         </div>
-        <IconArrowRight className="ml-auto h-4 w-4 shrink-0 text-cream/40 transition group-hover:translate-x-1" />
+        <IconArrowRight className="ml-auto h-4 w-4 shrink-0 text-text-subtle transition group-hover:translate-x-1" />
       </div>
-      <p className="mt-3 text-sm leading-snug text-cream/65">{way.tagline}</p>
+      <p className="mt-3 text-sm leading-snug text-text-muted">{way.tagline}</p>
     </motion.a>
   );
 }
 
 export default function Hero() {
   return (
-    <header id="top" className="relative overflow-hidden bg-ink px-6 pb-8 pt-12 text-cream sm:px-8 md:px-12">
+    <header id="top" className="relative overflow-hidden bg-band px-6 pb-8 pt-12 text-text sm:px-8 md:px-12">
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute -left-24 -top-24 h-72 w-72 rounded-full bg-violet/25 blur-3xl" />
         <div className="absolute right-0 top-0 h-80 w-80 rounded-full bg-flow/20 blur-3xl" />

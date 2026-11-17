@@ -20,7 +20,7 @@ export default function Principles() {
 
       <Plate labelledById="cams-art" caption="CAMS reúne o que muda quando desenvolvimento e operações trabalham juntos.">
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:items-center lg:gap-6">
-          <div className="overflow-hidden rounded-[28px] border border-white/10 bg-surface-raised">
+          <div className="overflow-hidden rounded-[28px] border border-hairline bg-surface-raised">
             <div className="mx-auto w-full max-w-[560px] px-6 py-10 lg:py-12">
               <CamsFigure labelledById="cams-art" className="mx-auto w-full" />
             </div>
@@ -40,12 +40,12 @@ export default function Principles() {
       </Plate>
 
       <Reveal delay={0.1} className="mt-8">
-        <h3 className="eyebrow mb-4 text-cream/55">Raízes</h3>
+        <h3 className="eyebrow mb-4 text-text-subtle">Raízes</h3>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {principles.roots.map((root) => (
-            <div key={root.title} className="rounded-2xl border border-dashed border-violet/30 bg-white/5 p-4">
+            <div key={root.title} className="rounded-2xl border border-dashed border-violet/30 bg-fill-subtle p-4">
               <h4 className="eyebrow text-violet-bright">{root.title}</h4>
-              <p className="mt-2 text-sm leading-snug text-cream/70">{root.text}</p>
+              <p className="mt-2 text-sm leading-snug text-text-muted">{root.text}</p>
             </div>
           ))}
         </div>

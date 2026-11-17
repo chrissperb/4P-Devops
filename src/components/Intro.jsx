@@ -18,7 +18,7 @@ export default function Intro() {
 
       <Reveal>
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="inline-flex rounded-full border border-white/15 bg-surface p-1">
+          <div className="inline-flex rounded-full border border-control bg-surface p-1">
             {[
               { key: 'before', label: silos.toggle.before },
               { key: 'after', label: silos.toggle.after },
@@ -28,14 +28,14 @@ export default function Intro() {
                 type="button"
                 onClick={() => setMode(option.key)}
                 className={`cursor-pointer rounded-full px-5 py-1.5 text-sm font-semibold transition ${
-                  mode === option.key ? 'bg-ink text-cream' : 'text-cream/70 hover:text-cream'
+                  mode === option.key ? 'bg-ink text-on-contrast' : 'text-text-muted hover:text-text'
                 }`}
               >
                 {option.label}
               </button>
             ))}
           </div>
-          <p className="text-sm font-medium text-cream/55">{isBefore ? silos.before.note : silos.after.note}</p>
+          <p className="text-sm font-medium text-text-subtle">{isBefore ? silos.before.note : silos.after.note}</p>
         </div>
       </Reveal>
 
@@ -44,7 +44,7 @@ export default function Intro() {
         caption={isBefore ? 'Objetivos opostos geram filas, retrabalho e o famoso "muro da confusão".' : 'Objetivos compartilhados substituem o conflito pela colaboração.'}
       >
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:items-center lg:gap-6">
-          <div className="overflow-hidden rounded-[28px] border border-white/10 bg-gradient-to-br from-flow-soft/60 via-transparent to-learning-soft/60">
+          <div className="overflow-hidden rounded-[28px] border border-hairline bg-gradient-to-br from-flow-soft/60 via-transparent to-learning-soft/60">
             <div className="mx-auto w-full max-w-[560px] px-6 py-10 lg:py-12">
               <AnimatePresence mode="wait">
                 <motion.div
@@ -85,7 +85,7 @@ export default function Intro() {
       </Plate>
 
       <Reveal delay={0.1} className="mt-8">
-        <div className="relative overflow-hidden rounded-3xl bg-surface p-6 ring-1 ring-white/10 md:p-8">
+        <div className="relative overflow-hidden rounded-3xl bg-surface p-6 ring-1 ring-hairline md:p-8">
           <div className="grid gap-8 md:grid-cols-[1.5fr_1fr] md:items-center">
             <div>
               <span className="chip bg-violet-soft text-violet">
@@ -93,15 +93,15 @@ export default function Intro() {
                 Definição
               </span>
               <h3 className="mt-4 font-display text-2xl font-bold md:text-3xl">{intro.definition.title}</h3>
-              <p className="mt-3 max-w-xl leading-relaxed text-cream/70">{intro.definition.text}</p>
+              <p className="mt-3 max-w-xl leading-relaxed text-text-muted">{intro.definition.text}</p>
             </div>
             <ul className="space-y-2.5">
               {intro.definition.points.map((point) => (
-                <li key={point} className="flex items-start gap-3 rounded-2xl bg-white/5 p-3.5">
+                <li key={point} className="flex items-start gap-3 rounded-2xl bg-fill-subtle p-3.5">
                   <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-learning/15 text-learning-bright">
                     <IconCheck className="h-4 w-4" />
                   </span>
-                  <span className="text-sm font-medium text-cream/70">{point}</span>
+                  <span className="text-sm font-medium text-text-muted">{point}</span>
                 </li>
               ))}
             </ul>

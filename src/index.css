@@ -15,14 +15,30 @@
   --c-band: 11 11 22;
 
   --c-glass: rgba(11, 11, 22, 0.75);
+  --c-glass-strong: rgba(11, 11, 22, 0.85);
   --c-text: 245 245 251;
   --c-text-muted: rgba(245, 245, 251, 0.7);
   --c-text-subtle: rgba(245, 245, 251, 0.55);
 
   --c-hairline: rgba(255, 255, 255, 0.1);
   --c-border-strong: rgba(255, 255, 255, 0.25);
+  --c-border-control: rgba(255, 255, 255, 0.15);
   --c-fill-subtle: rgba(255, 255, 255, 0.06);
   --c-fill-strong: rgba(255, 255, 255, 0.1);
+
+  /* Acentos: canais RGB para permitir `bg-*-soft/40`. Dark = hex originais. */
+  --c-flow-soft: 28 35 80;
+  --c-flow-deep: 30 51 184;
+  --c-flow-bright: 147 168 255;
+  --c-feedback-soft: 58 42 15;
+  --c-feedback-deep: 179 96 10;
+  --c-feedback-bright: 246 183 85;
+  --c-learning-soft: 14 51 47;
+  --c-learning-deep: 10 107 98;
+  --c-learning-bright: 79 214 196;
+  --c-violet-soft: 36 27 74;
+  --c-violet-deep: 74 47 214;
+  --c-violet-bright: 179 160 255;
 
   --c-on-contrast: 245 245 251;
   --c-focus: 179 160 255;
@@ -52,14 +68,26 @@
   --c-band: 241 241 248;
 
   --c-glass: rgba(255, 255, 255, 0.88);
+  --c-glass-strong: rgba(255, 255, 255, 0.95);
   --c-text: 11 11 22;
   --c-text-muted: #55556e;
-  --c-text-subtle: #6a6a80;
+  --c-text-subtle: #616178;
 
   --c-hairline: rgba(11, 11, 22, 0.12);
   --c-border-strong: rgba(11, 11, 22, 0.45);
+  --c-border-control: rgba(11, 11, 22, 0.2);
   --c-fill-subtle: rgba(11, 11, 22, 0.04);
   --c-fill-strong: rgba(11, 11, 22, 0.08);
+
+  /* `*-deep` herda do :root (mesmo hex nos dois temas). */
+  --c-flow-soft: 232 236 255;
+  --c-flow-bright: 30 51 184;
+  --c-feedback-soft: 255 242 221;
+  --c-feedback-bright: 163 85 10;
+  --c-learning-soft: 217 250 244;
+  --c-learning-bright: 10 107 98;
+  --c-violet-soft: 239 234 255;
+  --c-violet-bright: 74 47 214;
 
   --c-on-contrast: 245 245 251;
   --c-focus: 109 74 255;
@@ -100,7 +128,7 @@
 
 @layer components {
   .board {
-    @apply mx-auto w-full max-w-[1180px] overflow-hidden bg-surface shadow-lift sm:my-7 sm:rounded-[30px] sm:ring-1 sm:ring-white/10;
+    @apply mx-auto w-full max-w-[1180px] overflow-hidden bg-surface shadow-lift sm:my-7 sm:rounded-[30px] sm:ring-1 sm:ring-hairline;
   }
   .band {
     @apply px-6 py-14 sm:px-8 md:px-12 md:py-20;

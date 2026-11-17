@@ -52,19 +52,19 @@ function PipelineDiagram() {
           {stages.map((stage) => (
             <div key={stage.label} className="flex w-1/5 flex-col items-center gap-2.5">
               <div
-                className={`relative grid h-12 w-12 place-items-center rounded-2xl bg-surface-raised shadow-card ring-2 ring-white/10 sm:h-14 sm:w-14 ${toneText[stage.tone]}`}
+                className={`relative grid h-12 w-12 place-items-center rounded-2xl bg-surface-raised shadow-card ring-2 ring-hairline sm:h-14 sm:w-14 ${toneText[stage.tone]}`}
               >
                 <stage.Icon className="h-5 w-5 sm:h-6 sm:w-6" />
                 {stage.bottleneck && (
                   <span className="absolute -right-1.5 -top-1.5 h-3.5 w-3.5 animate-pulseSoft rounded-full bg-coral ring-2 ring-surface-raised" />
                 )}
               </div>
-              <span className="text-[11px] font-semibold text-cream/70 sm:text-xs">{stage.label}</span>
+              <span className="text-[11px] font-semibold text-text-muted sm:text-xs">{stage.label}</span>
             </div>
           ))}
         </div>
       </div>
-      <p className="mt-5 text-center text-xs font-medium text-cream/55">
+      <p className="mt-5 text-center text-xs font-medium text-text-subtle">
         <span className="mr-1 inline-block h-2 w-2 rounded-full bg-coral align-middle" />
         O gargalo (restrição) limita a velocidade de todo o fluxo.
       </p>
@@ -100,16 +100,16 @@ function FeedbackDiagram() {
             transition={{ delay: 0.15 + index * 0.12, duration: 0.4 }}
             className={`absolute ${node.pos} flex flex-col items-center gap-1`}
           >
-            <span className="grid h-12 w-12 place-items-center rounded-2xl bg-surface-raised text-feedback-bright shadow-card ring-2 ring-white/10">
+            <span className="grid h-12 w-12 place-items-center rounded-2xl bg-surface-raised text-feedback-bright shadow-card ring-2 ring-hairline">
               <node.Icon className="h-5 w-5" />
             </span>
-            <span className="rounded-full bg-surface-raised/90 px-2 py-0.5 text-[11px] font-semibold text-cream/70">
+            <span className="rounded-full bg-surface-raised/90 px-2 py-0.5 text-[11px] font-semibold text-text-muted">
               {node.label}
             </span>
           </motion.div>
         ))}
       </div>
-      <p className="mt-5 text-center text-xs font-medium text-cream/55">
+      <p className="mt-5 text-center text-xs font-medium text-text-subtle">
         Ciclo curto e contínuo: quanto mais rápido, mais cedo o problema é corrigido.
       </p>
     </div>
@@ -143,14 +143,14 @@ function LearningDiagram() {
               viewport={{ once: true }}
               transition={{ delay: index * 0.1, duration: 0.45 }}
               style={{ minHeight: `${92 + index * 20}px` }}
-              className={`flex min-w-0 flex-col justify-end gap-2 rounded-2xl border border-white/10 p-3 sm:flex-1 ${
+              className={`flex min-w-0 flex-col justify-end gap-2 rounded-2xl border border-hairline p-3 sm:flex-1 ${
                 index % 2 === 0 ? 'bg-learning-soft' : 'bg-surface-raised'
               }`}
             >
               <span className="grid h-10 w-10 place-items-center rounded-xl bg-surface-raised text-learning-bright shadow-card">
                 <step.Icon className="h-5 w-5" />
               </span>
-              <span className="text-[11px] font-semibold text-cream/70 sm:text-xs">{step.label}</span>
+              <span className="text-[11px] font-semibold text-text-muted sm:text-xs">{step.label}</span>
             </motion.div>
             {index < steps.length - 1 && (
               <IconArrowRight className="mb-6 hidden h-4 w-4 shrink-0 text-learning/60 sm:block sm:h-5 sm:w-5" />
@@ -162,8 +162,8 @@ function LearningDiagram() {
         <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-violet-soft text-violet-bright">
           <IconSharing className="h-5 w-5" />
         </span>
-        <p className="text-xs font-medium leading-snug text-cream/70 sm:text-sm">
-          <span className="font-semibold text-cream">Compartilhar:</span> a descoberta local vira melhoria global para
+        <p className="text-xs font-medium leading-snug text-text-muted sm:text-sm">
+          <span className="font-semibold text-text">Compartilhar:</span> a descoberta local vira melhoria global para
           toda a organização.
         </p>
       </div>
