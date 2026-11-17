@@ -2,17 +2,99 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Tokens semânticos. Canais RGB (dark = valores atuais da SPA) para permitir
+   modificadores de alpha do Tailwind; tokens com alpha de papel usam cor final.
+   O tema é aplicado por `data-theme` no <html> (script inline anti-FOUC). */
+:root {
+  color-scheme: dark;
+
+  --c-canvas: 8 8 15;
+  --c-surface: 18 18 31;
+  --c-surface-raised: 27 27 48;
+  --c-surface-sunken: 13 13 26;
+  --c-band: 11 11 22;
+
+  --c-glass: rgba(11, 11, 22, 0.75);
+  --c-text: 245 245 251;
+  --c-text-muted: rgba(245, 245, 251, 0.7);
+  --c-text-subtle: rgba(245, 245, 251, 0.55);
+
+  --c-hairline: rgba(255, 255, 255, 0.1);
+  --c-border-strong: rgba(255, 255, 255, 0.25);
+  --c-fill-subtle: rgba(255, 255, 255, 0.06);
+  --c-fill-strong: rgba(255, 255, 255, 0.1);
+
+  --c-on-contrast: 245 245 251;
+  --c-focus: 179 160 255;
+  --c-coral-deep: 255 157 178;
+
+  --c-fig-surface: 32 32 60;
+  --c-fig-text: 245 245 251;
+  --c-fig-text-muted: 199 199 221;
+  --c-fig-line: rgba(255, 255, 255, 0.18);
+  --c-fig-node-face: 251 250 247;
+  --c-fig-danger-soft: 58 31 42;
+  --c-fig-danger-text: 255 157 178;
+
+  --c-grid-line: rgba(255, 255, 255, 0.05);
+  --c-dot: rgba(255, 255, 255, 0.08);
+  --c-scrollbar-thumb: 42 42 68;
+  --c-scrollbar-thumb-hover: 58 58 92;
+}
+
+[data-theme='light'] {
+  color-scheme: light;
+
+  --c-canvas: 236 236 243;
+  --c-surface: 247 247 251;
+  --c-surface-raised: 255 255 255;
+  --c-surface-sunken: 233 233 244;
+  --c-band: 241 241 248;
+
+  --c-glass: rgba(255, 255, 255, 0.88);
+  --c-text: 11 11 22;
+  --c-text-muted: #55556e;
+  --c-text-subtle: #6a6a80;
+
+  --c-hairline: rgba(11, 11, 22, 0.12);
+  --c-border-strong: rgba(11, 11, 22, 0.45);
+  --c-fill-subtle: rgba(11, 11, 22, 0.04);
+  --c-fill-strong: rgba(11, 11, 22, 0.08);
+
+  --c-on-contrast: 245 245 251;
+  --c-focus: 109 74 255;
+  --c-coral-deep: 179 37 69;
+
+  --c-fig-surface: 255 255 255;
+  --c-fig-text: 11 11 22;
+  --c-fig-text-muted: 85 85 110;
+  --c-fig-line: rgba(11, 11, 22, 0.18);
+  --c-fig-node-face: 247 247 251;
+  --c-fig-danger-soft: 255 228 234;
+  --c-fig-danger-text: 179 37 69;
+
+  --c-grid-line: rgba(11, 11, 22, 0.07);
+  --c-dot: rgba(11, 11, 22, 0.1);
+  --c-scrollbar-thumb: 122 122 148;
+  --c-scrollbar-thumb-hover: 95 95 122;
+}
+
 @layer base {
   html {
     scroll-behavior: smooth;
     scroll-padding-top: 2rem;
+    background-color: rgb(var(--c-canvas));
   }
   body {
-    @apply bg-[#08080f] text-cream font-sans antialiased;
+    @apply bg-canvas text-text font-sans antialiased;
   }
   ::selection {
-    background: #6d4aff;
-    color: #fff;
+    background-color: theme('colors.violet.DEFAULT');
+    color: rgb(var(--c-on-contrast));
+  }
+  :focus-visible {
+    outline: 2px solid rgb(var(--c-focus));
+    outline-offset: 2px;
   }
 }
 
@@ -34,12 +116,12 @@
   }
   .bg-grid {
     background-image:
-      linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+      linear-gradient(var(--c-grid-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--c-grid-line) 1px, transparent 1px);
     background-size: 30px 30px;
   }
   .bg-dots {
-    background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1.2px, transparent 1.2px);
+    background-image: radial-gradient(var(--c-dot) 1.2px, transparent 1.2px);
     background-size: 18px 18px;
   }
 }
@@ -49,11 +131,11 @@
   height: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2a2a44;
+  background: rgb(var(--c-scrollbar-thumb));
   border-radius: 999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #3a3a5c;
+  background: rgb(var(--c-scrollbar-thumb-hover));
 }
 
 @media (prefers-reduced-motion: reduce) {
