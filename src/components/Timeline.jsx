@@ -7,20 +7,20 @@ function EventCard({ event, align }) {
   const accent = getAccent(event.tone);
   return (
     <div
-      className={`rounded-2xl border border-white/10 bg-surface-raised p-5 shadow-card transition hover:shadow-lift ${
+      className={`rounded-2xl border border-hairline bg-surface-raised p-5 shadow-card transition hover:shadow-lift ${
         align === 'right' ? 'text-right' : 'text-left'
       }`}
     >
       <span className={`chip ${accent.bgSoft} ${accent.text}`}>{event.year}</span>
-      <h4 className="mt-3 font-display text-lg font-bold leading-tight text-cream">{event.title}</h4>
-      <p className="mt-1.5 text-sm leading-snug text-cream/70">{event.text}</p>
+      <h4 className="mt-3 font-display text-lg font-bold leading-tight text-text">{event.title}</h4>
+      <p className="mt-1.5 text-sm leading-snug text-text-muted">{event.text}</p>
     </div>
   );
 }
 
 export default function Timeline() {
   return (
-    <section id="historia" className="band border-y border-white/10 bg-surface">
+    <section id="historia" className="band border-y border-hairline bg-surface">
       <SectionHeader index="02" eyebrow="História" title={timeline.heading} lead={timeline.lead} tone="violet" />
 
       <Reveal className="hidden lg:block">
@@ -35,7 +35,7 @@ export default function Timeline() {
                   <span
                     className={`absolute left-1/2 top-1/2 h-px w-4 -translate-y-1/2 ${
                       leftCard ? '-translate-x-full' : ''
-                    } bg-white/15`}
+                    } bg-fill-strong`}
                   />
                   <span
                     className="absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full ring-4 ring-surface"
@@ -60,7 +60,7 @@ export default function Timeline() {
       </Reveal>
 
       <Reveal className="lg:hidden">
-        <ol className="relative space-y-5 border-l-2 border-white/10 pl-6">
+        <ol className="relative space-y-5 border-l-2 border-hairline pl-6">
           {timeline.events.map((event) => {
             const accent = getAccent(event.tone);
             return (
@@ -69,10 +69,10 @@ export default function Timeline() {
                   className="absolute -left-[1.9rem] top-1.5 h-3.5 w-3.5 rounded-full ring-4 ring-surface"
                   style={{ backgroundColor: accent.hex }}
                 />
-                <div className="rounded-2xl border border-white/10 bg-surface-raised p-4 shadow-card">
+                <div className="rounded-2xl border border-hairline bg-surface-raised p-4 shadow-card">
                   <span className={`chip ${accent.bgSoft} ${accent.text}`}>{event.year}</span>
-                  <h4 className="mt-2 text-base font-bold text-cream">{event.title}</h4>
-                  <p className="mt-1 text-sm leading-snug text-cream/70">{event.text}</p>
+                  <h4 className="mt-2 text-base font-bold text-text">{event.title}</h4>
+                  <p className="mt-1 text-sm leading-snug text-text-muted">{event.text}</p>
                 </div>
               </li>
             );

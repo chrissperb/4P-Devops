@@ -20,7 +20,7 @@ export default function Examples() {
 
       <Plate labelledById="orgmap-art" caption="Empresas de setores diferentes aplicam os mesmos princípios em práticas concretas.">
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:items-center lg:gap-6">
-          <div className="overflow-hidden rounded-[28px] border border-white/10 bg-surface-raised">
+          <div className="overflow-hidden rounded-[28px] border border-hairline bg-surface-raised">
             <div className="mx-auto w-full max-w-[560px] px-6 py-10 lg:py-12">
               <OrgMapFigure labelledById="orgmap-art" className="mx-auto w-full" />
             </div>
