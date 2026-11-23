@@ -4,6 +4,8 @@
 
 **Entrega:** pipeline em `.github/workflows/deploy.yml` que valida, planeja e aplica a infraestrutura da Atividade III (CloudFormation) na AWS e publica a SPA deste repositório em Amazon S3 + CloudFront.
 
+**Vídeo demonstrativo:** [acesse o vídeo no YT](https://www.youtube.com/watch?v=LY2kfX6Djnk&t=1s)
+
 ---
 
 ## 1. O que o pipeline faz
